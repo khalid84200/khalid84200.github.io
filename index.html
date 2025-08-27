@@ -21,13 +21,13 @@
         };
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         window.db = getFirestore(initializeApp(firebaseConfig));
         window.auth = getAuth();
         window.firebase = {
-            collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch,
+            collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction,
             onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
         };
 
@@ -45,8 +45,8 @@
         .header-actions { display: flex; align-items: center; gap: 20px; }
         .header-actions i { font-size: 20px; cursor: pointer; }
         .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: var(--nav-height); background-color: var(--white); display: flex; justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 1000; transition: background-color 0.3s; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--light-gray); text-decoration: none; flex-grow: 1; transition: color 0.2s; }
-        .nav-item i { font-size: 22px; } .nav-item span { font-size: 11px; margin-top: 5px; } .nav-item.active { color: var(--primary-color); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--light-gray); text-decoration: none; flex-grow: 1; transition: color 0.2s; font-size: 10px; text-align: center; }
+        .nav-item i { font-size: 20px; } .nav-item span { margin-top: 5px; } .nav-item.active { color: var(--primary-color); }
         .page-content { display: none; } .page-content.active { display: block; animation: fadeIn 0.4s; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .card { background-color: var(--white); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); transition: background-color 0.3s, transform 0.2s; }
         .section-title { font-size: 20px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
@@ -56,27 +56,24 @@
         .fab { position: fixed; bottom: calc(var(--nav-height) + 20px); right: 20px; width: 56px; height: 56px; background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 15px rgba(0,0,0,0.2); cursor: pointer; z-index: 999; }
         .search-bar { width: 100%; padding: 12px 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px; background-color: var(--light-bg); color: var(--dark-gray); font-size: 16px; }
         .item-list { list-style: none; } .list-item { display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border-color); } .list-item-clickable { cursor: pointer; } .list-item:last-child { border-bottom: none; }
-        .item-icon { width: 45px; height: 45px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; margin-right: 15px; }
-        .bg-blue { background-color: #4A90E2; } .bg-green { background-color: #7ED321; } .bg-orange { background-color: #F5A623; } .bg-purple { background-color: #9013FE; }
-        .item-info { flex-grow: 1; } .item-title { font-weight: 600; font-size: 16px; } .item-subtitle { font-size: 14px; color: var(--light-gray); } .item-downtime { font-size: 12px; color: var(--danger-color); font-weight: 500; margin-top: 4px; }
+        .item-icon { width: 45px; height: 45px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; margin-right: 15px; flex-shrink: 0; }
+        .bg-blue { background-color: #4A90E2; } .bg-green { background-color: #7ED321; } .bg-orange { background-color: #F5A623; } .bg-purple { background-color: #9013FE; } .bg-grey { background-color: #9B9B9B; }
+        .item-info { flex-grow: 1; } .item-title { font-weight: 600; font-size: 16px; } .item-subtitle { font-size: 14px; color: var(--light-gray); }
+        .item-details { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .detail-badge { background-color: var(--light-bg); color: var(--dark-gray); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
         .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #fff; }
-        .status-planned { background-color: var(--primary-color); } .status-progress { background-color: var(--warning-color); } .status-completed { background-color: var(--secondary-color); }
-        .item-actions { display: flex; gap: 15px; align-items: center; } .item-actions i { font-size: 18px; color: var(--light-gray); cursor: pointer; transition: color 0.2s; } .item-actions i:hover { color: var(--primary-color); }
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 15px; text-align: center; }
-        .kpi-item i { font-size: 24px; color: var(--primary-color); margin-bottom: 8px; } .kpi-value { font-size: 22px; font-weight: 700; } .kpi-label { font-size: 12px; color: var(--light-gray); }
+        .status-planned { background-color: var(--primary-color); } .status-progress { background-color: var(--warning-color); } .status-completed { background-color: var(--secondary-color); } .status-low-stock { background-color: var(--warning-color); }
+        .status-info { background-color: var(--light-gray); color: var(--dark-gray); }
+        .item-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } 
+        .item-actions i { font-size: 18px; color: var(--light-gray); cursor: pointer; transition: color 0.2s; } 
+        .item-actions i:hover { color: var(--primary-color); }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .modal.active { opacity: 1; pointer-events: auto; } .modal-content { background-color: var(--white); padding: 25px; border-radius: 15px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; transform: scale(0.9); transition: transform 0.3s; }
         .modal.active .modal-content { transform: scale(1); } .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .modal-title { font-size: 20px; font-weight: 600; } .close-modal { font-size: 24px; cursor: pointer; color: var(--light-gray); }
         .form-group { margin-bottom: 15px; } .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
         .form-control { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background-color: var(--light-bg); color: var(--dark-gray); }
-        .date-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; }
-        .date-filter-grid button { grid-column: 1 / -1; }
-        .stats-modal-grid { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: center; }
-        .stats-item .value { font-size: 24px; font-weight: 700; color: var(--primary-color); }
-        .stats-item .label { font-size: 14px; color: var(--light-gray); }
         .loading-message { text-align: center; padding: 40px; color: var(--light-gray); }
-        
         #auth-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--light-bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
         .auth-box { width: 90%; max-width: 350px; padding: 30px; background-color: var(--white); border-radius: 15px; box-shadow: var(--shadow); text-align: center; }
         .auth-box h2 { margin-bottom: 20px; color: var(--primary-color); }
@@ -84,6 +81,14 @@
         .auth-toggle-link { margin-top: 15px; font-size: 14px; color: var(--primary-color); cursor: pointer; }
         #signup-form { display: none; }
         .app-container { display: none; }
+        .parts-search-results { max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 5px; }
+        .parts-search-results div { padding: 10px; cursor: pointer; }
+        .parts-search-results div:hover { background-color: var(--light-bg); }
+        .used-part-item { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .used-part-item span { flex-grow: 1; }
+        .used-part-item input { width: 60px; }
+        .used-part-item button { background: none; border: none; color: var(--danger-color); font-size: 18px; cursor: pointer; }
+        .filter-toggle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -117,7 +122,6 @@
             </div>
         </header>
         <main class="page-container">
-            <!-- CORRECTION : La structure HTML est maintenant statique -->
             <div class="page-content active" id="dashboard">
                 <div class="card" id="test-data-card" style="display: none;">
                     <div class="section-title"><i class="fas fa-database"></i> Base de données vide</div>
@@ -150,12 +154,12 @@
                 </div>
             </div>
             <div class="page-content" id="equipments">
-                <input type="text" class="search-bar" id="equipment-search" placeholder="Rechercher un équipement...">
+                <input type="text" class="search-bar" id="equipment-search" placeholder="Rechercher...">
                 <ul class="item-list" id="equipments-list"><div class="loading-message">Chargement...</div></ul>
             </div>
             <div class="page-content" id="interventions">
-                <input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher une intervention...">
-                <div class="card">
+                <input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher...">
+                 <div class="card">
                     <div class="section-title"><i class="fas fa-filter"></i> Filtrer les Interventions</div>
                     <div class="date-filter-grid">
                         <div class="form-group" style="margin:0;"><label for="intervention-date-start">Début</label><input type="date" id="intervention-date-start" class="form-control"></div>
@@ -168,13 +172,28 @@
                 </div>
                 <ul class="item-list" id="interventions-list"><div class="loading-message">Chargement...</div></ul>
             </div>
+            <div class="page-content" id="parts">
+                <input type="text" class="search-bar" id="part-search" placeholder="Rechercher...">
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-filter"></i> Filtrer les Pièces</div>
+                    <div class="form-group">
+                        <label for="supplier-filter">Fournisseur</label>
+                        <select id="supplier-filter" class="form-control"></select>
+                    </div>
+                    <div class="filter-toggle">
+                        <input type="checkbox" id="reorder-filter">
+                        <label for="reorder-filter">Afficher les articles à commander</label>
+                    </div>
+                </div>
+                <ul class="item-list" id="parts-list"><div class="loading-message">Chargement...</div></ul>
+            </div>
             <div class="page-content" id="technicians">
-                <input type="text" class="search-bar" id="technician-search" placeholder="Rechercher un technicien...">
+                <input type="text" class="search-bar" id="technician-search" placeholder="Rechercher...">
                 <ul class="item-list" id="technicians-list"><div class="loading-message">Chargement...</div></ul>
             </div>
         </main>
         <div class="fab" id="fab-add-button"><i class="fas fa-plus"></i></div>
-        <nav class="bottom-nav"><a href="#dashboard" class="nav-item active"><i class="fas fa-home"></i><span>Accueil</span></a><a href="#equipments" class="nav-item"><i class="fas fa-cogs"></i><span>Équipements</span></a><a href="#interventions" class="nav-item"><i class="fas fa-wrench"></i><span>Interventions</span></a><a href="#technicians" class="nav-item"><i class="fas fa-users"></i><span>Techniciens</span></a></nav>
+        <nav class="bottom-nav"><a href="#dashboard" class="nav-item active"><i class="fas fa-home"></i><span>Accueil</span></a><a href="#equipments" class="nav-item"><i class="fas fa-cogs"></i><span>Équipements</span></a><a href="#interventions" class="nav-item"><i class="fas fa-wrench"></i><span>Interventions</span></a><a href="#parts" class="nav-item"><i class="fas fa-box-open"></i><span>Pièces</span></a><a href="#technicians" class="nav-item"><i class="fas fa-users"></i><span>Techniciens</span></a></nav>
         <div class="modal" id="formModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="modalTitle">Nouveau</h3><span class="close-modal">&times;</span></div><form id="mainForm"></form></div></div>
         <div class="modal" id="qrModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">QR Code</h3><span class="close-modal">&times;</span></div><div id="qrCodeContainer" style="text-align: center;"><p id="qrEquipmentName" style="margin-bottom: 15px; font-weight: 500;"></p><div id="qrCodeCanvas"></div></div></div></div>
         <div class="modal" id="statsModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="statsModalTitle">Statistiques</h3><span class="close-modal">&times;</span></div><div class="stats-modal-grid"><div class="stats-item"><div class="value" id="statsTotalTime">--</div><div class="label">Temps total en intervention</div></div><div class="stats-item"><div class="value" id="statsWorkload">--</div><div class="label">Charge de travail</div></div></div></div></div>
@@ -183,7 +202,7 @@
 
 <script type="module">
 const GMAOApp = {
-    data: { equipments: [], technicians: [], interventions: [] },
+    data: { equipments: [], technicians: [], interventions: [], parts: [] },
     dashboardFilters: { startDate: null, endDate: null },
     charts: {},
     currentUser: null,
@@ -208,14 +227,8 @@ const GMAOApp = {
 
         document.getElementById('login-form').addEventListener('submit', e => this.handleLogin(e));
         document.getElementById('signup-form').addEventListener('submit', e => this.handleSignup(e));
-        document.getElementById('show-signup').addEventListener('click', () => {
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('signup-form').style.display = 'block';
-        });
-        document.getElementById('show-login').addEventListener('click', () => {
-            document.getElementById('signup-form').style.display = 'none';
-            document.getElementById('login-form').style.display = 'block';
-        });
+        document.getElementById('show-signup').addEventListener('click', () => { document.getElementById('login-form').style.display = 'none'; document.getElementById('signup-form').style.display = 'block'; });
+        document.getElementById('show-login').addEventListener('click', () => { document.getElementById('signup-form').style.display = 'none'; document.getElementById('login-form').style.display = 'block'; });
     },
 
     async handleLogin(e) {
@@ -230,21 +243,9 @@ const GMAOApp = {
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         errorMsg.textContent = '';
 
-        try {
-            await signInWithEmailAndPassword(window.auth, email, password);
-        } catch (error) {
-            switch (error.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    errorMsg.textContent = "Email ou mot de passe incorrect.";
-                    break;
-                case 'auth/invalid-email':
-                    errorMsg.textContent = "Le format de l'email est invalide.";
-                    break;
-                default:
-                    errorMsg.textContent = "Une erreur est survenue.";
-            }
+        try { await signInWithEmailAndPassword(window.auth, email, password); } 
+        catch (error) {
+            errorMsg.textContent = "Email ou mot de passe incorrect.";
             button.disabled = false;
             button.textContent = 'Se connecter';
         }
@@ -262,22 +263,9 @@ const GMAOApp = {
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         errorMsg.textContent = '';
 
-        try {
-            await createUserWithEmailAndPassword(window.auth, email, password);
-        } catch (error) {
-            switch (error.code) {
-                case 'auth/weak-password':
-                    errorMsg.textContent = "Le mot de passe doit faire 6 caractères minimum.";
-                    break;
-                case 'auth/email-already-in-use':
-                    errorMsg.textContent = "Cet email est déjà utilisé.";
-                    break;
-                case 'auth/invalid-email':
-                    errorMsg.textContent = "Le format de l'email est invalide.";
-                    break;
-                default:
-                    errorMsg.textContent = "Une erreur est survenue.";
-            }
+        try { await createUserWithEmailAndPassword(window.auth, email, password); } 
+        catch (error) {
+            errorMsg.textContent = "Erreur : mot de passe trop court ou email invalide.";
             button.disabled = false;
             button.textContent = 'Créer un compte';
         }
@@ -304,7 +292,7 @@ const GMAOApp = {
         this.unsubscribeListeners.forEach(unsub => unsub());
         this.unsubscribeListeners = [];
 
-        const collections = ['equipments', 'technicians', 'interventions'];
+        const collections = ['equipments', 'technicians', 'interventions', 'parts'];
         const basePath = `users/${this.currentUser.uid}`;
         
         collections.forEach(colName => {
@@ -323,27 +311,82 @@ const GMAOApp = {
             case '#dashboard': this.renderDashboard(); break;
             case '#equipments': this.renderListPage('equipments'); break;
             case '#interventions': this.renderInterventionsPage(); break;
+            case '#parts': this.renderPartsPage(); break;
             case '#technicians': this.renderListPage('technicians'); break;
         }
     },
     
     async handleSubmit(event) {
         event.preventDefault();
-        const { doc, addDoc, setDoc, collection } = window.firebase;
+        const { doc, addDoc, setDoc, collection, runTransaction } = window.firebase;
         const form = event.target;
         const type = form.dataset.type;
         const formData = new FormData(form);
         const id = formData.get('id');
         let itemData = Object.fromEntries(formData.entries());
+        
+        const newPartsUsed = {};
+        if (type === 'interventions') {
+            form.querySelectorAll('.used-part-item').forEach(item => {
+                const partId = item.dataset.partId;
+                const qtyInput = item.querySelector('input');
+                const qty = parseInt(qtyInput.value, 10);
+                if (qty > 0) {
+                    newPartsUsed[partId] = qty;
+                }
+            });
+            itemData.partsUsed = newPartsUsed;
+        }
+
         delete itemData.id;
         
         const path = `users/${this.currentUser.uid}/${type}`;
 
         try {
-            if (id) {
-                await setDoc(doc(window.db, path, id), itemData, { merge: true });
+            if (type === 'interventions') {
+                await runTransaction(window.db, async (transaction) => {
+                    const oldIntervention = id ? this.data.interventions.find(i => i.id === id) : null;
+                    const oldPartsUsed = oldIntervention?.partsUsed || {};
+                    const wasCompleted = oldIntervention?.status === 'completed';
+                    const isNowCompleted = itemData.status === 'completed';
+
+                    const stockChanges = {};
+                    const allPartIds = new Set([...Object.keys(oldPartsUsed), ...Object.keys(newPartsUsed)]);
+
+                    allPartIds.forEach(partId => {
+                        const oldQty = wasCompleted ? (oldPartsUsed[partId] || 0) : 0;
+                        const newQty = isNowCompleted ? (newPartsUsed[partId] || 0) : 0;
+                        const change = oldQty - newQty;
+                        if (change !== 0) {
+                            stockChanges[partId] = change;
+                        }
+                    });
+
+                    for (const partId in stockChanges) {
+                        const changeAmount = stockChanges[partId];
+                        const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, partId);
+                        const partDoc = await transaction.get(partRef);
+                        if (partDoc.exists()) {
+                            const currentQuantity = Number(partDoc.data().quantity);
+                            const newQuantity = currentQuantity + changeAmount;
+                            transaction.update(partRef, { quantity: newQuantity });
+                        }
+                    }
+
+                    if (id) {
+                        const interventionRef = doc(window.db, path, id);
+                        transaction.set(interventionRef, itemData, { merge: true });
+                    } else {
+                        const newInterventionRef = doc(collection(window.db, path));
+                        transaction.set(newInterventionRef, itemData);
+                    }
+                });
             } else {
-                await addDoc(collection(window.db, path), itemData);
+                if (id) {
+                    await setDoc(doc(window.db, path, id), itemData, { merge: true });
+                } else {
+                    await addDoc(collection(window.db, path), itemData);
+                }
             }
             this.closeModal('formModal');
         } catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
@@ -353,10 +396,8 @@ const GMAOApp = {
         if (!confirm('Voulez-vous vraiment supprimer cet élément ?')) return;
         const { doc, deleteDoc } = window.firebase;
         const path = `users/${this.currentUser.uid}/${type}/${id}`;
-        try {
-            await deleteDoc(doc(window.db, path));
-            this.closeModal('formModal');
-        } catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
+        try { await deleteDoc(doc(window.db, path)); this.closeModal('formModal'); } 
+        catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
     },
 
     getFilteredInterventions(filters) {
@@ -381,7 +422,7 @@ const GMAOApp = {
         if (this.data.interventions.length === 0 && this.data.equipments.length === 0) {
             document.getElementById('test-data-card').style.display = 'block';
         } else {
-            document.getElementById('test-data-card').style.display = 'none';
+             document.getElementById('test-data-card').style.display = 'none';
         }
 
         const filteredInterventions = this.getFilteredInterventions(this.dashboardFilters);
@@ -399,8 +440,7 @@ const GMAOApp = {
     },
 
     renderInterventionsPage() {
-        document.getElementById('intervention-date-start').addEventListener('input', () => this.renderInterventionsPage());
-        document.getElementById('intervention-date-end').addEventListener('input', () => this.renderInterventionsPage());
+        ['intervention-date-start', 'intervention-date-end'].forEach(id => { document.getElementById(id).addEventListener('input', () => this.renderInterventionsPage()); });
         document.getElementById('intervention-search').addEventListener('input', () => this.renderInterventionsPage());
 
         const startDate = document.getElementById('intervention-date-start').value;
@@ -413,15 +453,48 @@ const GMAOApp = {
         this.createChart('ratioChartCanvas', 'doughnut', { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#4A90E2', '#F5A623', '#50E3C2'] }] }, { plugins: { legend: { position: 'top' } } });
     },
 
+    renderPartsPage() {
+        const supplierFilter = document.getElementById('supplier-filter');
+        const reorderFilter = document.getElementById('reorder-filter');
+        const searchInput = document.getElementById('part-search');
+
+        const suppliers = [...new Set(this.data.parts.map(p => p.supplier))].filter(Boolean);
+        supplierFilter.innerHTML = `<option value="">Tous les fournisseurs</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+
+        const applyFilters = () => {
+            const selectedSupplier = supplierFilter.value;
+            const needsReorder = reorderFilter.checked;
+            const searchTerm = searchInput.value.toLowerCase();
+
+            let filteredParts = this.data.parts;
+
+            if (selectedSupplier) {
+                filteredParts = filteredParts.filter(p => p.supplier === selectedSupplier);
+            }
+            if (needsReorder) {
+                filteredParts = filteredParts.filter(p => Number(p.quantity) <= Number(p.minQuantity));
+            }
+            if (searchTerm) {
+                filteredParts = filteredParts.filter(p => p.name.toLowerCase().includes(searchTerm) || (p.reference && p.reference.toLowerCase().includes(searchTerm)));
+            }
+            this.renderList('parts', filteredParts, '');
+        };
+
+        supplierFilter.onchange = applyFilters;
+        reorderFilter.onchange = applyFilters;
+        searchInput.oninput = applyFilters;
+        applyFilters();
+    },
+
     renderList(type, data, searchTerm = '') {
         const listElement = document.getElementById(`${type}-list`);
         if (!listElement) return;
-        const filteredData = searchTerm ? data.filter(item => (item.name || item.desc).toLowerCase().includes(searchTerm.toLowerCase())) : data;
+        const filteredData = searchTerm ? data.filter(item => (item.name || item.desc || item.reference).toLowerCase().includes(searchTerm.toLowerCase())) : data;
         listElement.innerHTML = filteredData.length > 0 ? filteredData.map(item => this.getItemTemplate(type, item)).join('') : `<div class="loading-message">Aucun élément trouvé.</div>`;
     },
 
     getItemTemplate(type, item) {
-        let icon, title, subtitle, actions = '', downtimeInfo = '', clickableClass = 'list-item-clickable';
+        let icon, title, subtitle, actions = '', details = '', clickableClass = 'list-item-clickable';
         switch (type) {
             case 'equipments':
                 icon = `<div class="item-icon bg-blue"><i class="fas fa-cogs"></i></div>`;
@@ -434,7 +507,20 @@ const GMAOApp = {
                 title = item.desc; subtitle = `${eq ? eq.name : 'N/A'} - ${item.date ? new Date(item.date).toLocaleDateString() : ''}`;
                 const statusClasses = { planned: 'status-planned', progress: 'status-progress', completed: 'status-completed' };
                 actions = `<span class="status-badge ${statusClasses[item.status]}">${item.status}</span>`;
-                if (item.downtimeStart && item.downtimeEnd) downtimeInfo = `<div class="item-downtime"><i class="fas fa-clock"></i> Durée: ${this.formatDuration(new Date(item.downtimeEnd) - new Date(item.downtimeStart))}</div>`;
+                if (item.downtimeStart && item.downtimeEnd) details = `<div class="item-details"><span class="detail-badge"><i class="fas fa-clock"></i> ${this.formatDuration(new Date(item.downtimeEnd) - new Date(item.downtimeStart))}</span></div>`;
+                break;
+            case 'parts':
+                icon = `<div class="item-icon bg-grey"><i class="fas fa-box"></i></div>`;
+                title = item.name; subtitle = `Réf: ${item.reference || 'N/A'}`;
+                const stock = Number(item.quantity);
+                const minStock = Number(item.minQuantity);
+                const stockClass = stock <= minStock ? 'status-low-stock' : 'status-planned';
+                actions = `<div class="item-details">
+                    <span class="status-badge status-info">Fourn: ${item.supplier || '--'}</span>
+                    <span class="status-badge status-info">Délai: ${item.delaiLivraison || '--'}j</span>
+                    <span class="status-badge status-info">Min: ${minStock}</span>
+                    <span class="status-badge ${stockClass}">Stock: ${stock}</span>
+                </div>`;
                 break;
             case 'technicians':
                 icon = `<div class="item-icon bg-green"><i class="fas fa-user-cog"></i></div>`;
@@ -442,7 +528,7 @@ const GMAOApp = {
                 actions = `<i class="fas fa-edit" onclick="event.stopPropagation(); GMAOApp.openForm('technicians', '${item.id}')"></i>`;
                 break;
         }
-        return `<li class="list-item ${clickableClass}" data-type="${type}" data-id="${item.id}">${icon}<div class="item-info"><div class="item-title">${title}</div><div class="item-subtitle">${subtitle}</div>${downtimeInfo}</div><div class="item-actions">${actions}</div></li>`;
+        return `<li class="list-item ${clickableClass}" data-type="${type}" data-id="${item.id}">${icon}<div class="item-info"><div class="item-title">${title}</div><div class="item-subtitle">${subtitle}</div>${details}</div><div class="item-actions">${actions}</div></li>`;
     },
     calculateAndDisplayKPIs(correctiveCompleted) {
         let totalDowntime = correctiveCompleted.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
@@ -483,11 +569,19 @@ const GMAOApp = {
         let html = '', title = '', item = null;
         const eqOptions = this.data.equipments.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
         const techOptions = this.data.technicians.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        
         switch (type) {
             case 'interventions':
                 item = id ? this.data.interventions.find(i => i.id === id) : {};
                 title = id ? 'Modifier Intervention' : 'Nouvelle Intervention';
-                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Description</label><input type="text" name="desc" class="form-control" value="${item.desc || ''}" required></div><div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div><div class="form-group"><label>Type</label><select name="type" class="form-control"><option value="Préventive">Préventive</option><option value="Corrective">Corrective</option></select></div><div class="form-group"><label>Statut</label><select name="status" class="form-control"><option value="planned">planned</option><option value="progress">progress</option><option value="completed">completed</option></select></div><div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div><div class="form-group"><label>Technicien</label><select name="techId" class="form-control">${techOptions}</select></div><hr style="border: 1px solid var(--border-color); margin: 20px 0;"><div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div><div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>`;
+                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Description</label><input type="text" name="desc" class="form-control" value="${item.desc || ''}" required></div><div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div><div class="form-group"><label>Type</label><select name="type" class="form-control"><option value="Préventive">Préventive</option><option value="Corrective">Corrective</option></select></div><div class="form-group"><label>Statut</label><select name="status" class="form-control"><option value="planned">planned</option><option value="progress">progress</option><option value="completed">completed</option></select></div><div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div><div class="form-group"><label>Technicien</label><select name="techId" class="form-control">${techOptions}</select></div>
+                <div class="form-group"><label>Pièces utilisées</label><div id="used-parts-container"></div><input type="text" id="part-search-input" class="form-control" placeholder="Rechercher une pièce..."><div class="parts-search-results" id="parts-search-results"></div></div>
+                <hr style="border: 1px solid var(--border-color); margin: 20px 0;"><div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div><div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>`;
+                break;
+            case 'parts':
+                item = id ? this.data.parts.find(p => p.id === id) : {};
+                title = id ? 'Modifier Pièce' : 'Nouvelle Pièce';
+                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Référence</label><input type="text" name="reference" class="form-control" value="${item.reference || ''}"></div><div class="form-group"><label>Fournisseur</label><input type="text" name="supplier" class="form-control" value="${item.supplier || ''}"></div><div class="form-group"><label>Quantité</label><input type="number" name="quantity" class="form-control" value="${item.quantity || 0}" required></div><div class="form-group"><label>Quantité Minimum</label><input type="number" name="minQuantity" class="form-control" value="${item.minQuantity || 0}" required></div><div class="form-group"><label>Délai Livraison (jours)</label><input type="number" name="delaiLivraison" class="form-control" value="${item.delaiLivraison || 0}"></div>`;
                 break;
             default:
                 const typeLabels = { equipments: 'Équipement', technicians: 'Technicien' };
@@ -499,7 +593,15 @@ const GMAOApp = {
                 break;
         }
         form.innerHTML = html + `<button type="submit" class="btn btn-full">Enregistrer</button>${id ? `<button type="button" class="btn btn-full btn-danger" style="margin-top:10px;" onclick="GMAOApp.deleteItem('${type}', '${id}')">Supprimer</button>` : ''}`;
-        if(id && type === 'interventions'){ Object.keys(item).forEach(key => { if(form.elements[key] && item[key]) form.elements[key].value = item[key]; }); }
+        
+        if(id){ 
+            Object.keys(item).forEach(key => { if(form.elements[key]) form.elements[key].value = item[key]; });
+            if (type === 'interventions' && item.partsUsed) {
+                this.prefillUsedParts(item.partsUsed);
+            }
+        }
+        if (type === 'interventions') this.setupPartSearch();
+        
         modalTitle.textContent = title;
         form.dataset.type = type;
         document.getElementById('formModal').classList.add('active');
@@ -571,6 +673,57 @@ const GMAOApp = {
         });
     },
 
+    setupPartSearch() {
+        const searchInput = document.getElementById('part-search-input');
+        const searchResults = document.getElementById('parts-search-results');
+        
+        searchInput.addEventListener('input', () => {
+            const term = searchInput.value.toLowerCase();
+            if (term.length < 2) {
+                searchResults.innerHTML = '';
+                return;
+            }
+            const results = this.data.parts.filter(p => p.name.toLowerCase().includes(term) || (p.reference && p.reference.toLowerCase().includes(term)));
+            searchResults.innerHTML = results.map(p => `<div data-part-id="${p.id}">${p.name} - Réf: ${p.reference || 'N/A'}</div>`).join('');
+        });
+
+        searchResults.addEventListener('click', e => {
+            if (e.target.dataset.partId) {
+                const partId = e.target.dataset.partId;
+                const part = this.data.parts.find(p => p.id === partId);
+                this.addPartToUsedList(part);
+                searchInput.value = '';
+                searchResults.innerHTML = '';
+            }
+        });
+    },
+
+    addPartToUsedList(part, quantity = 1) {
+        const container = document.getElementById('used-parts-container');
+        if (container.querySelector(`[data-part-id="${part.id}"]`)) return; // Evite les doublons
+
+        const item = document.createElement('div');
+        item.className = 'used-part-item';
+        item.dataset.partId = part.id;
+        item.innerHTML = `
+            <span>${part.name}</span>
+            <input type="number" class="form-control" value="${quantity}" min="1">
+            <button type="button" class="remove-part-btn"><i class="fas fa-times-circle"></i></button>
+        `;
+        item.querySelector('.remove-part-btn').addEventListener('click', () => item.remove());
+        container.appendChild(item);
+    },
+
+    prefillUsedParts(partsUsed) {
+        if (!partsUsed) return;
+        for (const partId in partsUsed) {
+            const part = this.data.parts.find(p => p.id === partId);
+            if (part) {
+                this.addPartToUsedList(part, partsUsed[partId]);
+            }
+        }
+    },
+
     async addTestData() {
         if (!this.currentUser) return alert("Vous devez être connecté pour ajouter des données.");
         const { writeBatch, doc, collection } = window.firebase;
@@ -579,6 +732,7 @@ const GMAOApp = {
         const testData = {
             equipments: [ { name: "Presse Hydraulique P1", location: "Atelier A" }, { name: "Robot de soudure R2", location: "Ligne 3" } ],
             technicians: [ { name: "Jean Dupont", specialty: "Mécanique" }, { name: "Amina El Fassi", specialty: "Électronique" } ],
+            parts: [ { name: "Filtre à huile H-123", reference: "F-5540", supplier: "Fournisseur A", quantity: 12, minQuantity: 5, delaiLivraison: 3 }, { name: "Roulement 6204-2RS", reference: "R-6204", supplier: "Fournisseur B", quantity: 3, minQuantity: 4, delaiLivraison: 7 } ],
             interventions: [
                 { desc: "Panne moteur (test)", type: "Corrective", date: "2025-08-15", status: "completed", downtimeStart: "2025-08-15T08:00", downtimeEnd: "2025-08-15T10:30" },
                 { desc: "Contrôle préventif (test)", type: "Préventive", date: "2025-08-20", status: "completed", downtimeStart: "2025-08-20T09:00", downtimeEnd: "2025-08-20T10:00" },
@@ -587,6 +741,8 @@ const GMAOApp = {
         try {
             const eqRefs = testData.equipments.map(data => { const ref = doc(collection(window.db, basePath, "equipments")); batch.set(ref, data); return ref; });
             const techRefs = testData.technicians.map(data => { const ref = doc(collection(window.db, basePath, "technicians")); batch.set(ref, data); return ref; });
+            testData.parts.forEach(data => { const ref = doc(collection(window.db, basePath, "parts")); batch.set(ref, data); });
+            
             const int1 = testData.interventions[0]; int1.eqId = eqRefs[0].id; int1.techId = techRefs[0].id;
             batch.set(doc(collection(window.db, basePath, "interventions")), int1);
             const int2 = testData.interventions[1]; int2.eqId = eqRefs[0].id; int2.techId = techRefs[0].id;
@@ -602,3 +758,5 @@ window.GMAOApp = GMAOApp;
 </script>
 </body>
 </html>
+
+
