@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>GMAO Pro X</title>
+    <meta name="theme-color" content="#4A90E2"/>
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/96/maintenance.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+    <script type="module">
+        const firebaseConfig = {
+          apiKey: "AIzaSyBQCBlzr-RTDb99gF3sqhvbNIGXcf6OWEg",
+          authDomain: "ma-gmao-ca6a5.firebaseapp.com",
+          projectId: "ma-gmao-ca6a5",
+          storageBucket: "ma-gmao-ca6a5.appspot.com",
+          messagingSenderId: "279000639370",
+          appId: "1:279000639370:web:6c04f86ba8dc82d097ca73"
+        };
+        
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+        window.db = getFirestore(initializeApp(firebaseConfig));
+        window.auth = getAuth();
+        window.firebase = {
+            collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, writeBatch,
+            onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
+        };
+
+        document.addEventListener('DOMContentLoaded', () => GMAOApp.init());
+    </script>
+
+    <style>
+        :root { --primary-color: #4A90E2; --secondary-color: #50E3C2; --danger-color: #D0021B; --warning-color: #F5A623; --light-bg: #F4F7FC; --white: #FFFFFF; --dark-gray: #4A4A4A; --light-gray: #9B9B9B; --border-color: #EAEAEA; --shadow: 0 4px 12px rgba(0, 0, 0, 0.08); --header-height: 60px; --nav-height: 65px; }
+        body.dark-mode { --light-bg: #1a1a1a; --white: #2c2c2c; --dark-gray: #F4F7FC; --light-gray: #a0a0a0; --border-color: #3a3a3a; --shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--light-bg); color: var(--dark-gray); padding-bottom: var(--nav-height); transition: background-color 0.3s, color 0.3s; }
+        .page-container { padding: 15px; padding-top: calc(var(--header-height) + 15px); }
+        .app-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--header-height); background-color: var(--white); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 1000; transition: background-color 0.3s; }
+        .app-header h1 { font-size: 22px; color: var(--primary-color); display: flex; align-items: center; gap: 10px; }
+        .header-actions { display: flex; align-items: center; gap: 20px; }
+        .header-actions i { font-size: 20px; cursor: pointer; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: var(--nav-height); background-color: var(--white); display: flex; justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 1000; transition: background-color 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--light-gray); text-decoration: none; flex-grow: 1; transition: color 0.2s; }
+        .nav-item i { font-size: 22px; } .nav-item span { font-size: 11px; margin-top: 5px; } .nav-item.active { color: var(--primary-color); }
+        .page-content { display: none; } .page-content.active { display: block; animation: fadeIn 0.4s; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card { background-color: var(--white); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); transition: background-color 0.3s, transform 0.2s; }
+        .section-title { font-size: 20px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; border: none; background-color: var(--primary-color); color: #FFF; font-weight: 600; cursor: pointer; text-align: center; transition: background-color 0.2s, transform 0.2s; font-size: 16px; }
+        .btn:disabled { background-color: var(--light-gray); cursor: not-allowed; }
+        .btn:active { transform: scale(0.97); } .btn-full { width: 100%; } .btn-danger { background-color: var(--danger-color); }
+        .fab { position: fixed; bottom: calc(var(--nav-height) + 20px); right: 20px; width: 56px; height: 56px; background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 15px rgba(0,0,0,0.2); cursor: pointer; z-index: 999; }
+        .search-bar { width: 100%; padding: 12px 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px; background-color: var(--light-bg); color: var(--dark-gray); font-size: 16px; }
+        .item-list { list-style: none; } .list-item { display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border-color); } .list-item-clickable { cursor: pointer; } .list-item:last-child { border-bottom: none; }
+        .item-icon { width: 45px; height: 45px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; margin-right: 15px; }
+        .bg-blue { background-color: #4A90E2; } .bg-green { background-color: #7ED321; } .bg-orange { background-color: #F5A623; } .bg-purple { background-color: #9013FE; }
+        .item-info { flex-grow: 1; } .item-title { font-weight: 600; font-size: 16px; } .item-subtitle { font-size: 14px; color: var(--light-gray); } .item-downtime { font-size: 12px; color: var(--danger-color); font-weight: 500; margin-top: 4px; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #fff; }
+        .status-planned { background-color: var(--primary-color); } .status-progress { background-color: var(--warning-color); } .status-completed { background-color: var(--secondary-color); }
+        .item-actions { display: flex; gap: 15px; align-items: center; } .item-actions i { font-size: 18px; color: var(--light-gray); cursor: pointer; transition: color 0.2s; } .item-actions i:hover { color: var(--primary-color); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 15px; text-align: center; }
+        .kpi-item i { font-size: 24px; color: var(--primary-color); margin-bottom: 8px; } .kpi-value { font-size: 22px; font-weight: 700; } .kpi-label { font-size: 12px; color: var(--light-gray); }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal.active { opacity: 1; pointer-events: auto; } .modal-content { background-color: var(--white); padding: 25px; border-radius: 15px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; transform: scale(0.9); transition: transform 0.3s; }
+        .modal.active .modal-content { transform: scale(1); } .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { font-size: 20px; font-weight: 600; } .close-modal { font-size: 24px; cursor: pointer; color: var(--light-gray); }
+        .form-group { margin-bottom: 15px; } .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background-color: var(--light-bg); color: var(--dark-gray); }
+        .date-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; }
+        .date-filter-grid button { grid-column: 1 / -1; }
+        .stats-modal-grid { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: center; }
+        .stats-item .value { font-size: 24px; font-weight: 700; color: var(--primary-color); }
+        .stats-item .label { font-size: 14px; color: var(--light-gray); }
+        .loading-message { text-align: center; padding: 40px; color: var(--light-gray); }
+        
+        #auth-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--light-bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .auth-box { width: 90%; max-width: 350px; padding: 30px; background-color: var(--white); border-radius: 15px; box-shadow: var(--shadow); text-align: center; }
+        .auth-box h2 { margin-bottom: 20px; color: var(--primary-color); }
+        .auth-error { color: var(--danger-color); margin-top: 10px; font-size: 14px; height: 20px; }
+        .auth-toggle-link { margin-top: 15px; font-size: 14px; color: var(--primary-color); cursor: pointer; }
+        #signup-form { display: none; }
+        .app-container { display: none; }
+    </style>
+</head>
+<body>
+    <div id="auth-container">
+        <div class="auth-box">
+            <form id="login-form">
+                <h2><i class="fas fa-lock"></i> Connexion</h2>
+                <div class="form-group"><input type="email" id="login-email" class="form-control" placeholder="Email" required></div>
+                <div class="form-group"><input type="password" id="login-password" class="form-control" placeholder="Mot de passe" required></div>
+                <button type="submit" class="btn btn-full">Se connecter</button>
+                <p class="auth-error" id="login-error-msg"></p>
+                <p class="auth-toggle-link" id="show-signup">Pas de compte ? S'inscrire</p>
+            </form>
+            <form id="signup-form">
+                <h2><i class="fas fa-user-plus"></i> Inscription</h2>
+                <div class="form-group"><input type="email" id="signup-email" class="form-control" placeholder="Email" required></div>
+                <div class="form-group"><input type="password" id="signup-password" class="form-control" placeholder="Mot de passe (6+ caractères)" required></div>
+                <button type="submit" class="btn btn-full">Créer un compte</button>
+                <p class="auth-error" id="signup-error-msg"></p>
+                <p class="auth-toggle-link" id="show-login">Déjà un compte ? Se connecter</p>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <header class="app-header">
+            <h1><i class="fas fa-tools"></i> GMAO Pro X</h1>
+            <div class="header-actions">
+                <i class="fas fa-moon theme-switcher"></i>
+                <i class="fas fa-sign-out-alt" id="logout-btn" title="Déconnexion"></i>
+            </div>
+        </header>
+        <main class="page-container">
+            <!-- CORRECTION : La structure HTML est maintenant statique -->
+            <div class="page-content active" id="dashboard">
+                <div class="card" id="test-data-card" style="display: none;">
+                    <div class="section-title"><i class="fas fa-database"></i> Base de données vide</div>
+                    <p style="color: var(--light-gray); margin-bottom: 15px;">Cliquez pour ajouter des données de démo.</p>
+                    <button id="add-test-data-btn" class="btn btn-full">Ajouter Données de Test</button>
+                </div>
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-filter"></i> Filtrer</div>
+                    <div class="date-filter-grid">
+                        <div class="form-group" style="margin:0;"><label for="date-start">Début</label><input type="date" id="date-start" class="form-control"></div>
+                        <div class="form-group" style="margin:0;"><label for="date-end">Fin</label><input type="date" id="date-end" class="form-control"></div>
+                        <button id="filter-btn" class="btn"><i class="fas fa-check"></i> Appliquer</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-tachometer-alt"></i> KPI</div>
+                    <div class="kpi-grid">
+                        <div class="kpi-item"><i class="fas fa-thumbs-up" style="color: var(--secondary-color)"></i><div class="kpi-value" id="kpi-availability">--</div><div class="kpi-label">Disponibilité</div></div>
+                        <div class="kpi-item"><i class="fas fa-stopwatch" style="color: var(--warning-color)"></i><div class="kpi-value" id="kpi-mttr">--</div><div class="kpi-label">MTTR</div></div>
+                        <div class="kpi-item"><i class="fas fa-sync-alt" style="color: var(--primary-color)"></i><div class="kpi-value" id="kpi-mtbf">--</div><div class="kpi-label">MTBF</div></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-user-clock"></i> Temps d'intervention par Technicien (h)</div>
+                    <canvas id="downtimeByTechnicianChart"></canvas>
+                </div>
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-history"></i> Interventions récentes</div>
+                    <ul class="item-list" id="recent-interventions-list"><div class="loading-message">Chargement...</div></ul>
+                </div>
+            </div>
+            <div class="page-content" id="equipments">
+                <input type="text" class="search-bar" id="equipment-search" placeholder="Rechercher un équipement...">
+                <ul class="item-list" id="equipments-list"><div class="loading-message">Chargement...</div></ul>
+            </div>
+            <div class="page-content" id="interventions">
+                <input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher une intervention...">
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-filter"></i> Filtrer les Interventions</div>
+                    <div class="date-filter-grid">
+                        <div class="form-group" style="margin:0;"><label for="intervention-date-start">Début</label><input type="date" id="intervention-date-start" class="form-control"></div>
+                        <div class="form-group" style="margin:0;"><label for="intervention-date-end">Fin</label><input type="date" id="intervention-date-end" class="form-control"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-chart-pie"></i> Ratio Préventif / Correctif</div>
+                    <canvas id="ratioChartCanvas"></canvas>
+                </div>
+                <ul class="item-list" id="interventions-list"><div class="loading-message">Chargement...</div></ul>
+            </div>
+            <div class="page-content" id="technicians">
+                <input type="text" class="search-bar" id="technician-search" placeholder="Rechercher un technicien...">
+                <ul class="item-list" id="technicians-list"><div class="loading-message">Chargement...</div></ul>
+            </div>
+        </main>
+        <div class="fab" id="fab-add-button"><i class="fas fa-plus"></i></div>
+        <nav class="bottom-nav"><a href="#dashboard" class="nav-item active"><i class="fas fa-home"></i><span>Accueil</span></a><a href="#equipments" class="nav-item"><i class="fas fa-cogs"></i><span>Équipements</span></a><a href="#interventions" class="nav-item"><i class="fas fa-wrench"></i><span>Interventions</span></a><a href="#technicians" class="nav-item"><i class="fas fa-users"></i><span>Techniciens</span></a></nav>
+        <div class="modal" id="formModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="modalTitle">Nouveau</h3><span class="close-modal">&times;</span></div><form id="mainForm"></form></div></div>
+        <div class="modal" id="qrModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">QR Code</h3><span class="close-modal">&times;</span></div><div id="qrCodeContainer" style="text-align: center;"><p id="qrEquipmentName" style="margin-bottom: 15px; font-weight: 500;"></p><div id="qrCodeCanvas"></div></div></div></div>
+        <div class="modal" id="statsModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="statsModalTitle">Statistiques</h3><span class="close-modal">&times;</span></div><div class="stats-modal-grid"><div class="stats-item"><div class="value" id="statsTotalTime">--</div><div class="label">Temps total en intervention</div></div><div class="stats-item"><div class="value" id="statsWorkload">--</div><div class="label">Charge de travail</div></div></div></div></div>
+        <div class="modal" id="equipmentStatsModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="equipmentStatsModalTitle">Statistiques</h3><span class="close-modal">&times;</span></div><div class="stats-modal-grid"><div class="stats-item"><div class="value" id="equipmentDowntime24h">--</div><div class="label">Temps de panne (24h)</div></div></div></div></div>
+    </div>
+
+<script type="module">
+const GMAOApp = {
+    data: { equipments: [], technicians: [], interventions: [] },
+    dashboardFilters: { startDate: null, endDate: null },
+    charts: {},
+    currentUser: null,
+    unsubscribeListeners: [],
+
+    init() {
+        this.setupAuthUi();
+        this.applyTheme(localStorage.getItem('gmao-theme') || 'light');
+    },
+
+    setupAuthUi() {
+        const { onAuthStateChanged } = window.firebase;
+        onAuthStateChanged(window.auth, user => {
+            if (user) {
+                this.currentUser = user;
+                this.startApp();
+            } else {
+                this.currentUser = null;
+                this.showLoginScreen();
+            }
+        });
+
+        document.getElementById('login-form').addEventListener('submit', e => this.handleLogin(e));
+        document.getElementById('signup-form').addEventListener('submit', e => this.handleSignup(e));
+        document.getElementById('show-signup').addEventListener('click', () => {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('signup-form').style.display = 'block';
+        });
+        document.getElementById('show-login').addEventListener('click', () => {
+            document.getElementById('signup-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+        });
+    },
+
+    async handleLogin(e) {
+        e.preventDefault();
+        const { signInWithEmailAndPassword } = window.firebase;
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const errorMsg = document.getElementById('login-error-msg');
+        const button = e.target.querySelector('button');
+        
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        errorMsg.textContent = '';
+
+        try {
+            await signInWithEmailAndPassword(window.auth, email, password);
+        } catch (error) {
+            switch (error.code) {
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                    errorMsg.textContent = "Email ou mot de passe incorrect.";
+                    break;
+                case 'auth/invalid-email':
+                    errorMsg.textContent = "Le format de l'email est invalide.";
+                    break;
+                default:
+                    errorMsg.textContent = "Une erreur est survenue.";
+            }
+            button.disabled = false;
+            button.textContent = 'Se connecter';
+        }
+    },
+
+    async handleSignup(e) {
+        e.preventDefault();
+        const { createUserWithEmailAndPassword } = window.firebase;
+        const email = document.getElementById('signup-email').value;
+        const password = document.getElementById('signup-password').value;
+        const errorMsg = document.getElementById('signup-error-msg');
+        const button = e.target.querySelector('button');
+
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        errorMsg.textContent = '';
+
+        try {
+            await createUserWithEmailAndPassword(window.auth, email, password);
+        } catch (error) {
+            switch (error.code) {
+                case 'auth/weak-password':
+                    errorMsg.textContent = "Le mot de passe doit faire 6 caractères minimum.";
+                    break;
+                case 'auth/email-already-in-use':
+                    errorMsg.textContent = "Cet email est déjà utilisé.";
+                    break;
+                case 'auth/invalid-email':
+                    errorMsg.textContent = "Le format de l'email est invalide.";
+                    break;
+                default:
+                    errorMsg.textContent = "Une erreur est survenue.";
+            }
+            button.disabled = false;
+            button.textContent = 'Créer un compte';
+        }
+    },
+
+    showLoginScreen() {
+        document.querySelector('.app-container').style.display = 'none';
+        document.getElementById('auth-container').style.display = 'flex';
+        this.unsubscribeListeners.forEach(unsub => unsub());
+        this.unsubscribeListeners = [];
+    },
+
+    startApp() {
+        document.getElementById('auth-container').style.display = 'none';
+        document.querySelector('.app-container').style.display = 'block';
+        this.setupEventListeners();
+        this.attachRealtimeListeners();
+    },
+
+    attachRealtimeListeners() {
+        const { collection, onSnapshot } = window.firebase;
+        if (!this.currentUser) return;
+        
+        this.unsubscribeListeners.forEach(unsub => unsub());
+        this.unsubscribeListeners = [];
+
+        const collections = ['equipments', 'technicians', 'interventions'];
+        const basePath = `users/${this.currentUser.uid}`;
+        
+        collections.forEach(colName => {
+            const unsub = onSnapshot(collection(window.db, basePath, colName), (snapshot) => {
+                this.data[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.renderCurrentPage();
+            });
+            this.unsubscribeListeners.push(unsub);
+        });
+        this.navigateTo(window.location.hash || '#dashboard');
+    },
+
+    renderCurrentPage() {
+        const hash = window.location.hash || '#dashboard';
+        switch (hash) {
+            case '#dashboard': this.renderDashboard(); break;
+            case '#equipments': this.renderListPage('equipments'); break;
+            case '#interventions': this.renderInterventionsPage(); break;
+            case '#technicians': this.renderListPage('technicians'); break;
+        }
+    },
+    
+    async handleSubmit(event) {
+        event.preventDefault();
+        const { doc, addDoc, setDoc, collection } = window.firebase;
+        const form = event.target;
+        const type = form.dataset.type;
+        const formData = new FormData(form);
+        const id = formData.get('id');
+        let itemData = Object.fromEntries(formData.entries());
+        delete itemData.id;
+        
+        const path = `users/${this.currentUser.uid}/${type}`;
+
+        try {
+            if (id) {
+                await setDoc(doc(window.db, path, id), itemData, { merge: true });
+            } else {
+                await addDoc(collection(window.db, path), itemData);
+            }
+            this.closeModal('formModal');
+        } catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
+    },
+
+    async deleteItem(type, id) {
+        if (!confirm('Voulez-vous vraiment supprimer cet élément ?')) return;
+        const { doc, deleteDoc } = window.firebase;
+        const path = `users/${this.currentUser.uid}/${type}/${id}`;
+        try {
+            await deleteDoc(doc(window.db, path));
+            this.closeModal('formModal');
+        } catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
+    },
+
+    getFilteredInterventions(filters) {
+        const { startDate, endDate } = filters;
+        if (!startDate && !endDate) return this.data.interventions;
+        return this.data.interventions.filter(i => {
+            const iDate = new Date(i.date);
+            const start = startDate ? new Date(startDate) : null;
+            const end = endDate ? new Date(endDate) : null;
+            if (start && iDate < start) return false;
+            if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; }
+            return true;
+        });
+    },
+
+    renderDashboard() {
+        document.getElementById('add-test-data-btn').addEventListener('click', () => this.addTestData());
+        document.getElementById('date-start').value = this.dashboardFilters.startDate;
+        document.getElementById('date-end').value = this.dashboardFilters.endDate;
+        document.getElementById('filter-btn').addEventListener('click', () => { this.dashboardFilters.startDate = document.getElementById('date-start').value; this.dashboardFilters.endDate = document.getElementById('date-end').value; this.renderDashboard(); });
+
+        if (this.data.interventions.length === 0 && this.data.equipments.length === 0) {
+            document.getElementById('test-data-card').style.display = 'block';
+        } else {
+            document.getElementById('test-data-card').style.display = 'none';
+        }
+
+        const filteredInterventions = this.getFilteredInterventions(this.dashboardFilters);
+        const recentList = document.getElementById('recent-interventions-list');
+        const sorted = [...filteredInterventions].sort((a,b) => new Date(b.date) - new Date(a.date));
+        recentList.innerHTML = sorted.length ? sorted.slice(0, 3).map(item => this.getItemTemplate('interventions', item)).join('') : `<div class="loading-message">Aucune intervention récente.</div>`;
+        const correctiveCompleted = filteredInterventions.filter(i => i.type === 'Corrective' && i.status === 'completed' && i.downtimeStart && i.downtimeEnd).sort((a, b) => new Date(a.downtimeStart) - new Date(b.downtimeStart));
+        this.calculateAndDisplayKPIs(correctiveCompleted);
+        this.renderAnalysisCharts(filteredInterventions);
+    },
+
+    renderListPage(type) {
+        const searchTerm = document.getElementById(`${type.slice(0, -1)}-search`).value;
+        this.renderList(type, this.data[type], searchTerm);
+    },
+
+    renderInterventionsPage() {
+        document.getElementById('intervention-date-start').addEventListener('input', () => this.renderInterventionsPage());
+        document.getElementById('intervention-date-end').addEventListener('input', () => this.renderInterventionsPage());
+        document.getElementById('intervention-search').addEventListener('input', () => this.renderInterventionsPage());
+
+        const startDate = document.getElementById('intervention-date-start').value;
+        const endDate = document.getElementById('intervention-date-end').value;
+        const searchTerm = document.getElementById('intervention-search').value;
+        const filteredByDate = this.getFilteredInterventions({ startDate, endDate });
+        const filteredBySearch = filteredByDate.filter(item => (item.desc).toLowerCase().includes(searchTerm.toLowerCase()));
+        this.renderList('interventions', filteredBySearch, '');
+        const typeCounts = filteredByDate.reduce((acc, item) => { if (item.type) acc[item.type] = (acc[item.type] || 0) + 1; return acc; }, {});
+        this.createChart('ratioChartCanvas', 'doughnut', { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#4A90E2', '#F5A623', '#50E3C2'] }] }, { plugins: { legend: { position: 'top' } } });
+    },
+
+    renderList(type, data, searchTerm = '') {
+        const listElement = document.getElementById(`${type}-list`);
+        if (!listElement) return;
+        const filteredData = searchTerm ? data.filter(item => (item.name || item.desc).toLowerCase().includes(searchTerm.toLowerCase())) : data;
+        listElement.innerHTML = filteredData.length > 0 ? filteredData.map(item => this.getItemTemplate(type, item)).join('') : `<div class="loading-message">Aucun élément trouvé.</div>`;
+    },
+
+    getItemTemplate(type, item) {
+        let icon, title, subtitle, actions = '', downtimeInfo = '', clickableClass = 'list-item-clickable';
+        switch (type) {
+            case 'equipments':
+                icon = `<div class="item-icon bg-blue"><i class="fas fa-cogs"></i></div>`;
+                title = item.name; subtitle = item.location;
+                actions = `<i class="fas fa-edit" onclick="event.stopPropagation(); GMAOApp.openForm('equipments', '${item.id}')"></i><i class="fas fa-qrcode" onclick="event.stopPropagation(); GMAOApp.showQRCode('${item.id}')"></i>`;
+                break;
+            case 'interventions':
+                const eq = this.data.equipments.find(e => e.id === item.eqId);
+                icon = `<div class="item-icon bg-orange"><i class="fas fa-wrench"></i></div>`;
+                title = item.desc; subtitle = `${eq ? eq.name : 'N/A'} - ${item.date ? new Date(item.date).toLocaleDateString() : ''}`;
+                const statusClasses = { planned: 'status-planned', progress: 'status-progress', completed: 'status-completed' };
+                actions = `<span class="status-badge ${statusClasses[item.status]}">${item.status}</span>`;
+                if (item.downtimeStart && item.downtimeEnd) downtimeInfo = `<div class="item-downtime"><i class="fas fa-clock"></i> Durée: ${this.formatDuration(new Date(item.downtimeEnd) - new Date(item.downtimeStart))}</div>`;
+                break;
+            case 'technicians':
+                icon = `<div class="item-icon bg-green"><i class="fas fa-user-cog"></i></div>`;
+                title = item.name; subtitle = item.specialty;
+                actions = `<i class="fas fa-edit" onclick="event.stopPropagation(); GMAOApp.openForm('technicians', '${item.id}')"></i>`;
+                break;
+        }
+        return `<li class="list-item ${clickableClass}" data-type="${type}" data-id="${item.id}">${icon}<div class="item-info"><div class="item-title">${title}</div><div class="item-subtitle">${subtitle}</div>${downtimeInfo}</div><div class="item-actions">${actions}</div></li>`;
+    },
+    calculateAndDisplayKPIs(correctiveCompleted) {
+        let totalDowntime = correctiveCompleted.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
+        let totalUptime = 0;
+        if (correctiveCompleted.length > 1) { for (let i = 1; i < correctiveCompleted.length; i++) { const uptime = new Date(correctiveCompleted[i].downtimeStart) - new Date(correctiveCompleted[i - 1].downtimeEnd); if (uptime > 0) totalUptime += uptime; } }
+        const availability = (totalUptime + totalDowntime) > 0 ? (totalUptime / (totalUptime + totalDowntime)) * 100 : 100;
+        document.getElementById('kpi-availability').textContent = `${availability.toFixed(1)}%`;
+        const mttr = correctiveCompleted.length > 0 ? totalDowntime / correctiveCompleted.length : 0;
+        document.getElementById('kpi-mttr').textContent = this.formatDuration(mttr);
+        const mtbf = correctiveCompleted.length > 1 ? totalUptime / (correctiveCompleted.length - 1) : 0;
+        document.getElementById('kpi-mtbf').textContent = this.formatDuration(mtbf, true);
+    },
+    renderAnalysisCharts(allFilteredInterventions) {
+        const msToHours = ms => ms / 3600000;
+        const interventionsWithDuration = allFilteredInterventions.filter(i => i.status === 'completed' && i.downtimeStart && i.downtimeEnd);
+        const downtimeByTech = interventionsWithDuration.reduce((acc, i) => { acc[i.techId] = (acc[i.techId] || 0) + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)); return acc; }, {});
+        const techLabels = Object.keys(downtimeByTech).map(id => this.data.technicians.find(t => t.id == id)?.name || 'N/A');
+        const techData = Object.values(downtimeByTech).map(msToHours);
+        this.createChart('downtimeByTechnicianChart', 'bar', { labels: techLabels, datasets: [{ label: 'Heures en intervention', data: techData, backgroundColor: '#4A90E2' }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+    },
+    createChart(canvasId, type, data, options = {}) {
+        if(!document.getElementById(canvasId)) return;
+        if (this.charts[canvasId]) this.charts[canvasId].destroy();
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        this.charts[canvasId] = new Chart(ctx, { type, data, options: { responsive: true, ...options } });
+    },
+    navigateTo(hash) {
+        const newHash = hash || '#dashboard';
+        document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+        document.querySelector(newHash).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(n => { n.classList.toggle('active', n.getAttribute('href') === newHash); });
+        window.location.hash = newHash;
+        this.renderCurrentPage();
+    },
+    openForm(type, id = null) {
+        const form = document.getElementById('mainForm');
+        const modalTitle = document.getElementById('modalTitle');
+        let html = '', title = '', item = null;
+        const eqOptions = this.data.equipments.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+        const techOptions = this.data.technicians.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        switch (type) {
+            case 'interventions':
+                item = id ? this.data.interventions.find(i => i.id === id) : {};
+                title = id ? 'Modifier Intervention' : 'Nouvelle Intervention';
+                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Description</label><input type="text" name="desc" class="form-control" value="${item.desc || ''}" required></div><div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div><div class="form-group"><label>Type</label><select name="type" class="form-control"><option value="Préventive">Préventive</option><option value="Corrective">Corrective</option></select></div><div class="form-group"><label>Statut</label><select name="status" class="form-control"><option value="planned">planned</option><option value="progress">progress</option><option value="completed">completed</option></select></div><div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div><div class="form-group"><label>Technicien</label><select name="techId" class="form-control">${techOptions}</select></div><hr style="border: 1px solid var(--border-color); margin: 20px 0;"><div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div><div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>`;
+                break;
+            default:
+                const typeLabels = { equipments: 'Équipement', technicians: 'Technicien' };
+                title = id ? `Modifier ${typeLabels[type]}` : `Nouveau ${typeLabels[type]}`;
+                item = id ? this.data[type].find(e => e.id === id) : {};
+                const fields = { equipments: [{label: 'Nom', name: 'name'}, {label: 'Localisation', name: 'location'}], technicians: [{label: 'Nom', name: 'name'}, {label: 'Spécialité', name: 'specialty'}] };
+                html = `<input type="hidden" name="id" value="${item.id || ''}">`;
+                fields[type].forEach(field => { html += `<div class="form-group"><label>${field.label}</label><input type="text" name="${field.name}" class="form-control" value="${item[field.name] || ''}" required></div>`; });
+                break;
+        }
+        form.innerHTML = html + `<button type="submit" class="btn btn-full">Enregistrer</button>${id ? `<button type="button" class="btn btn-full btn-danger" style="margin-top:10px;" onclick="GMAOApp.deleteItem('${type}', '${id}')">Supprimer</button>` : ''}`;
+        if(id && type === 'interventions'){ Object.keys(item).forEach(key => { if(form.elements[key] && item[key]) form.elements[key].value = item[key]; }); }
+        modalTitle.textContent = title;
+        form.dataset.type = type;
+        document.getElementById('formModal').classList.add('active');
+    },
+    showTechnicianStats(id) {
+        const technicien = this.data.technicians.find(t => t.id === id); if (!technicien) return;
+        const interventionsFiltrees = this.getFilteredInterventions(this.dashboardFilters);
+        const techInterventions = interventionsFiltrees.filter(i => i.techId === id && (i.type === 'Corrective' || i.type === 'Préventive') && i.status === 'completed' && i.downtimeStart && i.downtimeEnd);
+        const totalWorkTime = techInterventions.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
+        const uniqueWorkDays = new Set(techInterventions.map(i => i.date)).size;
+        const workdayInMillis = (8 * 60 - 45) * 60 * 1000;
+        const totalWorkableTime = uniqueWorkDays * workdayInMillis;
+        const workloadPercentage = totalWorkableTime > 0 ? (totalWorkTime / totalWorkableTime) * 100 : 0;
+        document.getElementById('statsModalTitle').textContent = `Stats de ${technicien.name}`;
+        document.getElementById('statsTotalTime').textContent = this.formatDuration(totalWorkTime, true);
+        document.getElementById('statsWorkload').textContent = `${workloadPercentage.toFixed(1)}%`;
+        document.getElementById('statsModal').classList.add('active');
+    },
+    showEquipmentStats(id) {
+        const equipment = this.data.equipments.find(e => e.id === id); if (!equipment) return;
+        const now = new Date(); const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const downtimeInMillis = this.data.interventions.filter(i => i.eqId === id && i.type === 'Corrective' && i.status === 'completed' && i.downtimeEnd && new Date(i.downtimeEnd) > yesterday).reduce((total, i) => total + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
+        document.getElementById('equipmentStatsModalTitle').textContent = `Stats de ${equipment.name}`;
+        document.getElementById('equipmentDowntime24h').textContent = this.formatDuration(downtimeInMillis);
+        document.getElementById('equipmentStatsModal').classList.add('active');
+    },
+    closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); },
+    showQRCode(id) {
+        const eq = this.data.equipments.find(e => e.id === id); if(!eq) return;
+        const qrContainer = document.getElementById('qrCodeCanvas'); qrContainer.innerHTML = '';
+        document.getElementById('qrEquipmentName').textContent = eq.name;
+        new QRCode(qrContainer, { text: `gmao://equipment/${eq.id}`, width: 200, height: 200 });
+        document.getElementById('qrModal').classList.add('active');
+    },
+    toggleTheme() { const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark'; this.applyTheme(newTheme); localStorage.setItem('gmao-theme', newTheme); },
+    applyTheme(theme) {
+        const icon = document.querySelector('.theme-switcher');
+        if (theme === 'dark') { document.body.classList.add('dark-mode'); icon.classList.replace('fa-moon', 'fa-sun'); } 
+        else { document.body.classList.remove('dark-mode'); icon.classList.replace('fa-sun', 'fa-moon'); }
+    },
+    formatDuration(ms, long = false) {
+        if (ms <= 0 || !ms) return long ? "0j 0h 0m" : "0m";
+        const days = Math.floor(ms / 86400000); const hours = Math.floor((ms % 86400000) / 3600000);
+        const minutes = Math.floor((ms % 3600000) / 60000);
+        if (long) return `${days}j ${hours}h ${minutes}m`;
+        let result = '';
+        if (days > 0) result += `${days}j `; if (hours > 0) result += `${hours}h `;
+        result += `${minutes}m`; return result.trim() || "0m";
+    },
+    setupEventListeners() {
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            const { signOut } = window.firebase;
+            signOut(window.auth);
+        });
+        window.addEventListener('hashchange', () => this.navigateTo(window.location.hash));
+        document.querySelector('.bottom-nav').addEventListener('click', e => { const navItem = e.target.closest('.nav-item'); if (navItem) { e.preventDefault(); this.navigateTo(navItem.getAttribute('href')); } });
+        document.getElementById('fab-add-button').addEventListener('click', () => { const page = (window.location.hash || '#dashboard').substring(1); if (page !== 'dashboard' && page !== '') this.openForm(page); });
+        document.querySelectorAll('.modal').forEach(modal => { modal.addEventListener('click', e => { if (e.target === modal || e.target.classList.contains('close-modal')) this.closeModal(modal.id); }); });
+        document.getElementById('mainForm').addEventListener('submit', this.handleSubmit.bind(this));
+        document.querySelector('.theme-switcher').addEventListener('click', this.toggleTheme.bind(this));
+        document.querySelector('.app-container').addEventListener('click', e => {
+            const listItem = e.target.closest('.list-item-clickable'); if (!listItem) return;
+            const type = listItem.dataset.type; const id = listItem.dataset.id;
+            switch(type) {
+                case 'technicians': this.showTechnicianStats(id); break;
+                case 'equipments': this.showEquipmentStats(id); break;
+                default: this.openForm(type, id); break;
+            }
+        });
+    },
+
+    async addTestData() {
+        if (!this.currentUser) return alert("Vous devez être connecté pour ajouter des données.");
+        const { writeBatch, doc, collection } = window.firebase;
+        const batch = writeBatch(window.db);
+        const basePath = `users/${this.currentUser.uid}`;
+        const testData = {
+            equipments: [ { name: "Presse Hydraulique P1", location: "Atelier A" }, { name: "Robot de soudure R2", location: "Ligne 3" } ],
+            technicians: [ { name: "Jean Dupont", specialty: "Mécanique" }, { name: "Amina El Fassi", specialty: "Électronique" } ],
+            interventions: [
+                { desc: "Panne moteur (test)", type: "Corrective", date: "2025-08-15", status: "completed", downtimeStart: "2025-08-15T08:00", downtimeEnd: "2025-08-15T10:30" },
+                { desc: "Contrôle préventif (test)", type: "Préventive", date: "2025-08-20", status: "completed", downtimeStart: "2025-08-20T09:00", downtimeEnd: "2025-08-20T10:00" },
+            ]
+        };
+        try {
+            const eqRefs = testData.equipments.map(data => { const ref = doc(collection(window.db, basePath, "equipments")); batch.set(ref, data); return ref; });
+            const techRefs = testData.technicians.map(data => { const ref = doc(collection(window.db, basePath, "technicians")); batch.set(ref, data); return ref; });
+            const int1 = testData.interventions[0]; int1.eqId = eqRefs[0].id; int1.techId = techRefs[0].id;
+            batch.set(doc(collection(window.db, basePath, "interventions")), int1);
+            const int2 = testData.interventions[1]; int2.eqId = eqRefs[0].id; int2.techId = techRefs[0].id;
+            batch.set(doc(collection(window.db, basePath, "interventions")), int2);
+            await batch.commit();
+            alert("Données de test ajoutées avec succès !");
+        } catch (e) { console.error("Erreur ajout données: ", e); alert("Erreur lors de l'ajout des données."); }
+    }
+};
+
+window.GMAOApp = GMAOApp;
+
+</script>
+</body>
+</html>
