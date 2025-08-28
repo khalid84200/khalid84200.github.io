@@ -6,6 +6,9 @@
     <title>GMAO Pro X</title>
     <meta name="theme-color" content="#4A90E2"/>
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/96/maintenance.png">
+    <link rel="manifest" href="data:application/manifest+json,{&quot;name&quot;:&quot;GMAO Pro X&quot;,&quot;short_name&quot;:&quot;GMAO&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;#F4F7FC&quot;,&quot;theme_color&quot;:&quot;#4A90E2&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;https://img.icons8.com/fluency/96/maintenance.png&quot;,&quot;sizes&quot;:&quot;96x96&quot;,&quot;type&quot;:&quot;image/png&quot;}]}">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -43,10 +46,11 @@
         .app-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--header-height); background-color: var(--white); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 1000; transition: background-color 0.3s; }
         .app-header h1 { font-size: 22px; color: var(--primary-color); display: flex; align-items: center; gap: 10px; }
         .header-actions { display: flex; align-items: center; gap: 20px; }
-        .header-actions i { font-size: 20px; cursor: pointer; }
+        .header-actions i { font-size: 20px; cursor: pointer; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
         .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: var(--nav-height); background-color: var(--white); display: flex; justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 1000; transition: background-color 0.3s; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--light-gray); text-decoration: none; flex-grow: 1; transition: color 0.2s; font-size: 10px; text-align: center; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--light-gray); text-decoration: none; flex-grow: 1; transition: color 0.2s; font-size: 10px; text-align: center; position: relative; }
         .nav-item i { font-size: 20px; } .nav-item span { margin-top: 5px; } .nav-item.active { color: var(--primary-color); }
+        .notification-dot { position: absolute; top: 2px; right: 15px; width: 8px; height: 8px; background-color: var(--danger-color); border-radius: 50%; display: none; }
         .page-content { display: none; } .page-content.active { display: block; animation: fadeIn 0.4s; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .card { background-color: var(--white); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); transition: background-color 0.3s, transform 0.2s; }
         .section-title { font-size: 20px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
@@ -89,6 +93,16 @@
         .used-part-item input { width: 60px; }
         .used-part-item button { background: none; border: none; color: var(--danger-color); font-size: 18px; cursor: pointer; }
         .filter-toggle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .chart-container { max-height: 250px; position: relative; }
+        .kpi-grid-pro { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center; }
+        .kpi-gauge-container { position: relative; width: 120px; height: 120px; margin: 0 auto; }
+        .kpi-gauge-value { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; font-weight: bold; }
+        .kpi-column { text-align: center; }
+        .kpi-column .kpi-value { font-size: 22px; font-weight: 700; }
+        .kpi-column .kpi-label { font-size: 12px; color: var(--light-gray); }
+        .detail-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .detail-table th, .detail-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color); }
+        .detail-table th { font-size: 12px; color: var(--light-gray); }
     </style>
 </head>
 <body>
@@ -118,6 +132,7 @@
             <h1><i class="fas fa-tools"></i> GMAO Pro X</h1>
             <div class="header-actions">
                 <i class="fas fa-moon theme-switcher"></i>
+                <i class="fab fa-whatsapp" id="whatsapp-btn" title="Communauté"></i>
                 <i class="fas fa-sign-out-alt" id="logout-btn" title="Déconnexion"></i>
             </div>
         </header>
@@ -138,15 +153,23 @@
                 </div>
                 <div class="card">
                     <div class="section-title"><i class="fas fa-tachometer-alt"></i> KPI</div>
-                    <div class="kpi-grid">
-                        <div class="kpi-item"><i class="fas fa-thumbs-up" style="color: var(--secondary-color)"></i><div class="kpi-value" id="kpi-availability">--</div><div class="kpi-label">Disponibilité</div></div>
-                        <div class="kpi-item"><i class="fas fa-stopwatch" style="color: var(--warning-color)"></i><div class="kpi-value" id="kpi-mttr">--</div><div class="kpi-label">MTTR</div></div>
-                        <div class="kpi-item"><i class="fas fa-sync-alt" style="color: var(--primary-color)"></i><div class="kpi-value" id="kpi-mtbf">--</div><div class="kpi-label">MTBF</div></div>
+                    <div class="kpi-grid-pro">
+                        <div class="kpi-gauge-container">
+                            <canvas id="availabilityChart"></canvas>
+                            <div id="kpi-availability-value" class="kpi-gauge-value">--%</div>
+                        </div>
+                        <div class="kpi-column">
+                            <div class="kpi-value" id="kpi-mttr">--</div>
+                            <div class="kpi-label">MTTR</div>
+                            <hr style="margin: 10px 0; border-color: var(--border-color);">
+                            <div class="kpi-value" id="kpi-mtbf">--</div>
+                            <div class="kpi-label">MTBF</div>
+                        </div>
                     </div>
                 </div>
                 <div class="card">
-                    <div class="section-title"><i class="fas fa-user-clock"></i> Temps d'intervention par Technicien (h)</div>
-                    <canvas id="downtimeByTechnicianChart"></canvas>
+                    <div class="section-title"><i class="fas fa-chart-bar"></i> Top 3 Machines - Temps d'arrêt (h)</div>
+                    <canvas id="downtimeByMachineChart"></canvas>
                 </div>
                 <div class="card">
                     <div class="section-title"><i class="fas fa-history"></i> Interventions récentes</div>
@@ -158,7 +181,7 @@
                 <ul class="item-list" id="equipments-list"><div class="loading-message">Chargement...</div></ul>
             </div>
             <div class="page-content" id="interventions">
-                <input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher...">
+                <input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher par OT ou description...">
                  <div class="card">
                     <div class="section-title"><i class="fas fa-filter"></i> Filtrer les Interventions</div>
                     <div class="date-filter-grid">
@@ -168,12 +191,16 @@
                 </div>
                 <div class="card">
                     <div class="section-title"><i class="fas fa-chart-pie"></i> Ratio Préventif / Correctif</div>
-                    <canvas id="ratioChartCanvas"></canvas>
+                    <div class="chart-container"><canvas id="ratioChartCanvas"></canvas></div>
                 </div>
                 <ul class="item-list" id="interventions-list"><div class="loading-message">Chargement...</div></ul>
             </div>
             <div class="page-content" id="parts">
                 <input type="text" class="search-bar" id="part-search" placeholder="Rechercher...">
+                <div class="card">
+                    <div class="section-title"><i class="fas fa-dollar-sign"></i> Valeur du Stock</div>
+                    <h3 id="total-stock-value" style="text-align: center; color: var(--primary-color);">Calcul...</h3>
+                </div>
                 <div class="card">
                     <div class="section-title"><i class="fas fa-filter"></i> Filtrer les Pièces</div>
                     <div class="form-group">
@@ -193,11 +220,13 @@
             </div>
         </main>
         <div class="fab" id="fab-add-button"><i class="fas fa-plus"></i></div>
-        <nav class="bottom-nav"><a href="#dashboard" class="nav-item active"><i class="fas fa-home"></i><span>Accueil</span></a><a href="#equipments" class="nav-item"><i class="fas fa-cogs"></i><span>Équipements</span></a><a href="#interventions" class="nav-item"><i class="fas fa-wrench"></i><span>Interventions</span></a><a href="#parts" class="nav-item"><i class="fas fa-box-open"></i><span>Pièces</span></a><a href="#technicians" class="nav-item"><i class="fas fa-users"></i><span>Techniciens</span></a></nav>
+        <nav class="bottom-nav"><a href="#dashboard" class="nav-item active"><i class="fas fa-home"></i><span>Accueil</span></a><a href="#equipments" class="nav-item"><i class="fas fa-cogs"></i><span>Équipements</span></a><a href="#interventions" class="nav-item"><i class="fas fa-wrench"></i><span>Interventions</span></a><a href="#parts" class="nav-item"><i class="fas fa-box-open"></i><span>Pièces</span><span class="notification-dot"></span></a><a href="#technicians" class="nav-item"><i class="fas fa-users"></i><span>Techniciens</span></a></nav>
         <div class="modal" id="formModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="modalTitle">Nouveau</h3><span class="close-modal">&times;</span></div><form id="mainForm"></form></div></div>
         <div class="modal" id="qrModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">QR Code</h3><span class="close-modal">&times;</span></div><div id="qrCodeContainer" style="text-align: center;"><p id="qrEquipmentName" style="margin-bottom: 15px; font-weight: 500;"></p><div id="qrCodeCanvas"></div></div></div></div>
         <div class="modal" id="statsModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="statsModalTitle">Statistiques</h3><span class="close-modal">&times;</span></div><div class="stats-modal-grid"><div class="stats-item"><div class="value" id="statsTotalTime">--</div><div class="label">Temps total en intervention</div></div><div class="stats-item"><div class="value" id="statsWorkload">--</div><div class="label">Charge de travail</div></div></div></div></div>
-        <div class="modal" id="equipmentStatsModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="equipmentStatsModalTitle">Statistiques</h3><span class="close-modal">&times;</span></div><div class="stats-modal-grid"><div class="stats-item"><div class="value" id="equipmentDowntime24h">--</div><div class="label">Temps de panne (24h)</div></div></div></div></div>
+        <div class="modal" id="equipmentDetailModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="equipmentDetailModalTitle">Détails</h3><span class="close-modal">&times;</span></div><div id="equipmentDetailContent"></div></div></div>
+        <div class="modal" id="partDetailModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="partDetailModalTitle">Détails de la pièce</h3><span class="close-modal">&times;</span></div><div id="partDetailContent"></div></div></div>
+        <div class="modal" id="whatsappModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">Rejoindre la communauté</h3><span class="close-modal">&times;</span></div><div style="text-align: center; display: flex; flex-direction: column; gap: 15px;"><a href="https://chat.whatsapp.com/BNWATqvGwSIJ5a5jIZE80H" target="_blank" class="btn btn-full" style="background-color: #25D366;"><i class="fab fa-whatsapp"></i> Rejoindre le Groupe</a><a href="https://whatsapp.com/channel/0029Vb6TLcqEFeXjfGXHAe2v" target="_blank" class="btn btn-full" style="background-color: #25D366;"><i class="fas fa-bullhorn"></i> Suivre la Chaîne</a></div></div></div>
     </div>
 
 <script type="module">
@@ -307,6 +336,11 @@ const GMAOApp = {
 
     renderCurrentPage() {
         const hash = window.location.hash || '#dashboard';
+        this.updateLowStockNotification();
+        
+        document.getElementById('whatsapp-btn').style.display = (hash === '#dashboard') ? 'block' : 'none';
+        document.getElementById('fab-add-button').style.display = (hash === '#dashboard') ? 'none' : 'flex';
+
         switch (hash) {
             case '#dashboard': this.renderDashboard(); break;
             case '#equipments': this.renderListPage('equipments'); break;
@@ -343,6 +377,14 @@ const GMAOApp = {
         const path = `users/${this.currentUser.uid}/${type}`;
 
         try {
+            if (type === 'parts' && !id && itemData.reference) {
+                const existingPart = this.data.parts.find(p => p.reference && p.reference.toLowerCase() === itemData.reference.toLowerCase());
+                if (existingPart) {
+                    alert("Erreur : Une pièce avec cette référence existe déjà.");
+                    return;
+                }
+            }
+
             if (type === 'interventions') {
                 await runTransaction(window.db, async (transaction) => {
                     const oldIntervention = id ? this.data.interventions.find(i => i.id === id) : null;
@@ -353,23 +395,20 @@ const GMAOApp = {
                     const stockChanges = {};
                     const allPartIds = new Set([...Object.keys(oldPartsUsed), ...Object.keys(newPartsUsed)]);
 
-                    allPartIds.forEach(partId => {
+                    for (const partId of allPartIds) {
                         const oldQty = wasCompleted ? (oldPartsUsed[partId] || 0) : 0;
                         const newQty = isNowCompleted ? (newPartsUsed[partId] || 0) : 0;
                         const change = oldQty - newQty;
                         if (change !== 0) {
-                            stockChanges[partId] = change;
-                        }
-                    });
-
-                    for (const partId in stockChanges) {
-                        const changeAmount = stockChanges[partId];
-                        const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, partId);
-                        const partDoc = await transaction.get(partRef);
-                        if (partDoc.exists()) {
-                            const currentQuantity = Number(partDoc.data().quantity);
-                            const newQuantity = currentQuantity + changeAmount;
-                            transaction.update(partRef, { quantity: newQuantity });
+                            const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, partId);
+                            const partDoc = await transaction.get(partRef);
+                            if (partDoc.exists()) {
+                                const currentQuantity = Number(partDoc.data().quantity);
+                                if (currentQuantity + change < 0) {
+                                    throw `Stock insuffisant pour ${partDoc.data().name}. Stock actuel: ${currentQuantity}, requis: ${-change}.`;
+                                }
+                                transaction.update(partRef, { quantity: currentQuantity + change });
+                            }
                         }
                     }
 
@@ -377,6 +416,7 @@ const GMAOApp = {
                         const interventionRef = doc(window.db, path, id);
                         transaction.set(interventionRef, itemData, { merge: true });
                     } else {
+                        itemData.otNumber = `OT-${Date.now()}`;
                         const newInterventionRef = doc(collection(window.db, path));
                         transaction.set(newInterventionRef, itemData);
                     }
@@ -389,7 +429,7 @@ const GMAOApp = {
                 }
             }
             this.closeModal('formModal');
-        } catch (e) { console.error("Erreur Firestore: ", e); alert("Une erreur est survenue."); }
+        } catch (e) { console.error("Erreur Firestore: ", e); alert(e); }
     },
 
     async deleteItem(type, id) {
@@ -445,9 +485,9 @@ const GMAOApp = {
 
         const startDate = document.getElementById('intervention-date-start').value;
         const endDate = document.getElementById('intervention-date-end').value;
-        const searchTerm = document.getElementById('intervention-search').value;
+        const searchTerm = document.getElementById('intervention-search').value.toLowerCase();
         const filteredByDate = this.getFilteredInterventions({ startDate, endDate });
-        const filteredBySearch = filteredByDate.filter(item => (item.desc).toLowerCase().includes(searchTerm.toLowerCase()));
+        const filteredBySearch = filteredByDate.filter(item => (item.desc.toLowerCase().includes(searchTerm)) || (item.otNumber && item.otNumber.toLowerCase().includes(searchTerm)));
         this.renderList('interventions', filteredBySearch, '');
         const typeCounts = filteredByDate.reduce((acc, item) => { if (item.type) acc[item.type] = (acc[item.type] || 0) + 1; return acc; }, {});
         this.createChart('ratioChartCanvas', 'doughnut', { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#4A90E2', '#F5A623', '#50E3C2'] }] }, { plugins: { legend: { position: 'top' } } });
@@ -457,9 +497,15 @@ const GMAOApp = {
         const supplierFilter = document.getElementById('supplier-filter');
         const reorderFilter = document.getElementById('reorder-filter');
         const searchInput = document.getElementById('part-search');
+        const totalStockValueEl = document.getElementById('total-stock-value');
 
         const suppliers = [...new Set(this.data.parts.map(p => p.supplier))].filter(Boolean);
         supplierFilter.innerHTML = `<option value="">Tous les fournisseurs</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+
+        const totalValue = this.data.parts.reduce((total, part) => {
+            return total + (Number(part.quantity) * Number(part.unitPrice || 0));
+        }, 0);
+        totalStockValueEl.textContent = `${totalValue.toFixed(2)} Dhs.`;
 
         const applyFilters = () => {
             const selectedSupplier = supplierFilter.value;
@@ -489,7 +535,7 @@ const GMAOApp = {
     renderList(type, data, searchTerm = '') {
         const listElement = document.getElementById(`${type}-list`);
         if (!listElement) return;
-        const filteredData = searchTerm ? data.filter(item => (item.name || item.desc || item.reference).toLowerCase().includes(searchTerm.toLowerCase())) : data;
+        const filteredData = searchTerm ? data.filter(item => (item.name && item.name.toLowerCase().includes(searchTerm)) || (item.desc && item.desc.toLowerCase().includes(searchTerm)) || (item.reference && item.reference.toLowerCase().includes(searchTerm)) || (item.otNumber && item.otNumber.toLowerCase().includes(searchTerm))) : data;
         listElement.innerHTML = filteredData.length > 0 ? filteredData.map(item => this.getItemTemplate(type, item)).join('') : `<div class="loading-message">Aucun élément trouvé.</div>`;
     },
 
@@ -504,7 +550,8 @@ const GMAOApp = {
             case 'interventions':
                 const eq = this.data.equipments.find(e => e.id === item.eqId);
                 icon = `<div class="item-icon bg-orange"><i class="fas fa-wrench"></i></div>`;
-                title = item.desc; subtitle = `${eq ? eq.name : 'N/A'} - ${item.date ? new Date(item.date).toLocaleDateString() : ''}`;
+                title = `${item.otNumber || ''}: ${item.desc}`; 
+                subtitle = `${eq ? eq.name : 'N/A'} - ${item.date ? new Date(item.date).toLocaleDateString() : ''}`;
                 const statusClasses = { planned: 'status-planned', progress: 'status-progress', completed: 'status-completed' };
                 actions = `<span class="status-badge ${statusClasses[item.status]}">${item.status}</span>`;
                 if (item.downtimeStart && item.downtimeEnd) details = `<div class="item-details"><span class="detail-badge"><i class="fas fa-clock"></i> ${this.formatDuration(new Date(item.downtimeEnd) - new Date(item.downtimeStart))}</span></div>`;
@@ -515,11 +562,12 @@ const GMAOApp = {
                 const stock = Number(item.quantity);
                 const minStock = Number(item.minQuantity);
                 const stockClass = stock <= minStock ? 'status-low-stock' : 'status-planned';
-                actions = `<div class="item-details">
+                actions = `<div class="item-actions">
                     <span class="status-badge status-info">Fourn: ${item.supplier || '--'}</span>
                     <span class="status-badge status-info">Délai: ${item.delaiLivraison || '--'}j</span>
                     <span class="status-badge status-info">Min: ${minStock}</span>
                     <span class="status-badge ${stockClass}">Stock: ${stock}</span>
+                    <i class="fas fa-edit" onclick="event.stopPropagation(); GMAOApp.openForm('parts', '${item.id}')"></i>
                 </div>`;
                 break;
             case 'technicians':
@@ -535,19 +583,37 @@ const GMAOApp = {
         let totalUptime = 0;
         if (correctiveCompleted.length > 1) { for (let i = 1; i < correctiveCompleted.length; i++) { const uptime = new Date(correctiveCompleted[i].downtimeStart) - new Date(correctiveCompleted[i - 1].downtimeEnd); if (uptime > 0) totalUptime += uptime; } }
         const availability = (totalUptime + totalDowntime) > 0 ? (totalUptime / (totalUptime + totalDowntime)) * 100 : 100;
-        document.getElementById('kpi-availability').textContent = `${availability.toFixed(1)}%`;
-        const mttr = correctiveCompleted.length > 0 ? totalDowntime / correctiveCompleted.length : 0;
-        document.getElementById('kpi-mttr').textContent = this.formatDuration(mttr);
-        const mtbf = correctiveCompleted.length > 1 ? totalUptime / (correctiveCompleted.length - 1) : 0;
-        document.getElementById('kpi-mtbf').textContent = this.formatDuration(mtbf, true);
+        
+        document.getElementById('kpi-availability-value').textContent = `${availability.toFixed(1)}%`;
+        this.createChart('availabilityChart', 'doughnut', {
+            datasets: [{
+                data: [availability, 100 - availability],
+                backgroundColor: [getComputedStyle(document.documentElement).getPropertyValue('--secondary-color'), getComputedStyle(document.documentElement).getPropertyValue('--border-color')],
+                borderWidth: 0,
+                cutout: '70%'
+            }]
+        }, { plugins: { tooltip: { enabled: false } } });
+
+        document.getElementById('kpi-mttr').textContent = this.formatDuration(correctiveCompleted.length > 0 ? totalDowntime / correctiveCompleted.length : 0);
+        document.getElementById('kpi-mtbf').textContent = this.formatDuration(correctiveCompleted.length > 1 ? totalUptime / (correctiveCompleted.length - 1) : 0, true);
     },
     renderAnalysisCharts(allFilteredInterventions) {
         const msToHours = ms => ms / 3600000;
         const interventionsWithDuration = allFilteredInterventions.filter(i => i.status === 'completed' && i.downtimeStart && i.downtimeEnd);
-        const downtimeByTech = interventionsWithDuration.reduce((acc, i) => { acc[i.techId] = (acc[i.techId] || 0) + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)); return acc; }, {});
-        const techLabels = Object.keys(downtimeByTech).map(id => this.data.technicians.find(t => t.id == id)?.name || 'N/A');
-        const techData = Object.values(downtimeByTech).map(msToHours);
-        this.createChart('downtimeByTechnicianChart', 'bar', { labels: techLabels, datasets: [{ label: 'Heures en intervention', data: techData, backgroundColor: '#4A90E2' }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+        
+        const downtimeByMachine = interventionsWithDuration.reduce((acc, i) => {
+            const eq = this.data.equipments.find(e => e.id === i.eqId);
+            if(eq) {
+                acc[eq.name] = (acc[eq.name] || 0) + (new Date(i.downtimeEnd) - new Date(i.downtimeStart));
+            }
+            return acc;
+        }, {});
+
+        const sortedMachines = Object.entries(downtimeByMachine).sort((a, b) => b[1] - a[1]).slice(0, 3);
+        const machineLabels = sortedMachines.map(entry => entry[0]);
+        const machineData = sortedMachines.map(entry => msToHours(entry[1]));
+
+        this.createChart('downtimeByMachineChart', 'bar', { labels: machineLabels, datasets: [{ label: "Heures d'arrêt", data: machineData, backgroundColor: '#D0021B' }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
     },
     createChart(canvasId, type, data, options = {}) {
         if(!document.getElementById(canvasId)) return;
@@ -562,6 +628,9 @@ const GMAOApp = {
         document.querySelectorAll('.nav-item').forEach(n => { n.classList.toggle('active', n.getAttribute('href') === newHash); });
         window.location.hash = newHash;
         this.renderCurrentPage();
+    },
+    openModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
     },
     openForm(type, id = null) {
         const form = document.getElementById('mainForm');
@@ -581,7 +650,7 @@ const GMAOApp = {
             case 'parts':
                 item = id ? this.data.parts.find(p => p.id === id) : {};
                 title = id ? 'Modifier Pièce' : 'Nouvelle Pièce';
-                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Référence</label><input type="text" name="reference" class="form-control" value="${item.reference || ''}"></div><div class="form-group"><label>Fournisseur</label><input type="text" name="supplier" class="form-control" value="${item.supplier || ''}"></div><div class="form-group"><label>Quantité</label><input type="number" name="quantity" class="form-control" value="${item.quantity || 0}" required></div><div class="form-group"><label>Quantité Minimum</label><input type="number" name="minQuantity" class="form-control" value="${item.minQuantity || 0}" required></div><div class="form-group"><label>Délai Livraison (jours)</label><input type="number" name="delaiLivraison" class="form-control" value="${item.delaiLivraison || 0}"></div>`;
+                html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Référence</label><input type="text" name="reference" class="form-control" value="${item.reference || ''}"></div><div class="form-group"><label>Fournisseur</label><input type="text" name="supplier" class="form-control" value="${item.supplier || ''}"></div><div class="form-group"><label>Prix Unitaire (HT)</label><input type="number" step="0.01" name="unitPrice" class="form-control" value="${item.unitPrice || 0}"></div><div class="form-group"><label>Quantité</label><input type="number" name="quantity" class="form-control" value="${item.quantity || 0}" required ${id ? 'readonly' : ''}></div><div class="form-group"><label>Quantité Minimum</label><input type="number" name="minQuantity" class="form-control" value="${item.minQuantity || 0}" required></div><div class="form-group"><label>Délai Livraison (jours)</label><input type="number" name="delaiLivraison" class="form-control" value="${item.delaiLivraison || 0}"></div>`;
                 break;
             default:
                 const typeLabels = { equipments: 'Équipement', technicians: 'Technicien' };
@@ -604,7 +673,7 @@ const GMAOApp = {
         
         modalTitle.textContent = title;
         form.dataset.type = type;
-        document.getElementById('formModal').classList.add('active');
+        this.openModal('formModal');
     },
     showTechnicianStats(id) {
         const technicien = this.data.technicians.find(t => t.id === id); if (!technicien) return;
@@ -618,15 +687,171 @@ const GMAOApp = {
         document.getElementById('statsModalTitle').textContent = `Stats de ${technicien.name}`;
         document.getElementById('statsTotalTime').textContent = this.formatDuration(totalWorkTime, true);
         document.getElementById('statsWorkload').textContent = `${workloadPercentage.toFixed(1)}%`;
-        document.getElementById('statsModal').classList.add('active');
+        this.openModal('statsModal');
     },
-    showEquipmentStats(id) {
+    showEquipmentDetails(id) {
         const equipment = this.data.equipments.find(e => e.id === id); if (!equipment) return;
-        const now = new Date(); const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const downtimeInMillis = this.data.interventions.filter(i => i.eqId === id && i.type === 'Corrective' && i.status === 'completed' && i.downtimeEnd && new Date(i.downtimeEnd) > yesterday).reduce((total, i) => total + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
-        document.getElementById('equipmentStatsModalTitle').textContent = `Stats de ${equipment.name}`;
-        document.getElementById('equipmentDowntime24h').textContent = this.formatDuration(downtimeInMillis);
-        document.getElementById('equipmentStatsModal').classList.add('active');
+        document.getElementById('equipmentDetailModalTitle').textContent = `Détails pour ${equipment.name}`;
+        const contentEl = document.getElementById('equipmentDetailContent');
+        contentEl.innerHTML = `
+            <div class="date-filter-grid">
+                <div class="form-group" style="margin:0;"><label>Début</label><input type="date" id="equip-detail-start" class="form-control"></div>
+                <div class="form-group" style="margin:0;"><label>Fin</label><input type="date" id="equip-detail-end" class="form-control"></div>
+            </div>
+            <h4 style="margin-top: 20px;">Temps d'arrêt total</h4>
+            <p id="equip-detail-downtime">--</p>
+            <h4 style="margin-top: 20px;">Pièces consommées</h4>
+            <div id="equip-detail-parts"></div>
+        `;
+
+        const calculateDetails = () => {
+            const startDate = document.getElementById('equip-detail-start').value;
+            const endDate = document.getElementById('equip-detail-end').value;
+            
+            const relevantInterventions = this.data.interventions.filter(i => {
+                if (i.eqId !== id || i.status !== 'completed') return false;
+                const iDate = new Date(i.date);
+                const start = startDate ? new Date(startDate) : null;
+                const end = endDate ? new Date(endDate) : null;
+                if (start && iDate < start) return false;
+                if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; }
+                return true;
+            });
+
+            const totalDowntime = relevantInterventions.reduce((total, i) => {
+                if (i.downtimeStart && i.downtimeEnd) {
+                    return total + (new Date(i.downtimeEnd) - new Date(i.downtimeStart));
+                }
+                return total;
+            }, 0);
+            document.getElementById('equip-detail-downtime').textContent = this.formatDuration(totalDowntime, true);
+
+            const partsListEl = document.getElementById('equip-detail-parts');
+            let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>OT</th><th>Pièce</th><th>Qté</th></tr>';
+            let partsFound = false;
+            relevantInterventions.forEach(i => {
+                if(i.partsUsed && Object.keys(i.partsUsed).length > 0) {
+                    partsFound = true;
+                    for (const partId in i.partsUsed) {
+                        const part = this.data.parts.find(p => p.id === partId);
+                        tableHTML += `<tr><td>${new Date(i.date).toLocaleDateString()}</td><td>${i.otNumber || '--'}</td><td>${part ? part.name : 'N/A'}</td><td>${i.partsUsed[partId]}</td></tr>`;
+                    }
+                }
+            });
+            tableHTML += '</table>';
+            partsListEl.innerHTML = partsFound ? tableHTML : '<p>Aucune pièce consommée sur cette période.</p>';
+        };
+
+        document.getElementById('equip-detail-start').onchange = calculateDetails;
+        document.getElementById('equip-detail-end').onchange = calculateDetails;
+        calculateDetails();
+        this.openModal('equipmentDetailModal');
+    },
+    showPartDetails(id) {
+        const part = this.data.parts.find(p => p.id === id); if (!part) return;
+        document.getElementById('partDetailModalTitle').textContent = `Détails pour ${part.name}`;
+        const contentEl = document.getElementById('partDetailContent');
+        contentEl.innerHTML = `
+            <div class="date-filter-grid">
+                <div class="form-group" style="margin:0;"><label>Début</label><input type="date" id="part-detail-start" class="form-control"></div>
+                <div class="form-group" style="margin:0;"><label>Fin</label><input type="date" id="part-detail-end" class="form-control"></div>
+            </div>
+            <div class="form-group" style="margin-top: 20px;">
+                <label>Ajouter un approvisionnement</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="part-supply-qty" class="form-control" placeholder="Quantité">
+                    <input type="text" id="part-supply-po" class="form-control" placeholder="N° BC">
+                    <button id="add-supply-btn" class="btn"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+            <h4 style="margin-top: 20px;">Historique des mouvements</h4>
+            <div id="part-detail-history"></div>
+        `;
+
+        const calculateDetails = () => {
+            const startDate = document.getElementById('part-detail-start').value;
+            const endDate = document.getElementById('part-detail-end').value;
+
+            const consumptions = this.data.interventions
+                .filter(i => {
+                    if (!i.partsUsed || !i.partsUsed[id] || i.status !== 'completed') return false;
+                    const iDate = new Date(i.date);
+                    const start = startDate ? new Date(startDate) : null;
+                    const end = endDate ? new Date(endDate) : null;
+                    if (start && iDate < start) return false;
+                    if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; }
+                    return true;
+                })
+                .map(i => ({
+                    date: i.date,
+                    type: 'Consommation',
+                    quantity: `-${i.partsUsed[id]}`,
+                    details: `${i.otNumber || 'N/A'} sur ${this.data.equipments.find(e => e.id === i.eqId)?.name || 'N/A'}`
+                }));
+            
+            const supplies = (part.history || [])
+                .filter(h => {
+                    if (h.type !== 'approvisionnement') return false;
+                     const hDate = new Date(h.date);
+                    const start = startDate ? new Date(startDate) : null;
+                    const end = endDate ? new Date(endDate) : null;
+                    if (start && hDate < start) return false;
+                    if (end) { end.setHours(23, 59, 59, 999); if (hDate > end) return false; }
+                    return true;
+                })
+                .map(h => ({ ...h, quantity: `+${h.quantity}` }));
+
+            const history = [...consumptions, ...supplies].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            const historyEl = document.getElementById('part-detail-history');
+            if (history.length === 0) {
+                historyEl.innerHTML = '<p>Aucun mouvement sur cette période.</p>';
+            } else {
+                let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>Type</th><th>Détails</th><th>Qté</th></tr>';
+                history.forEach(h => {
+                    tableHTML += `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${h.type}</td><td>${h.details}</td><td>${h.quantity}</td></tr>`;
+                });
+                tableHTML += '</table>';
+                historyEl.innerHTML = tableHTML;
+            }
+        };
+
+        document.getElementById('add-supply-btn').addEventListener('click', async () => {
+            const qty = parseInt(document.getElementById('part-supply-qty').value, 10);
+            const poNumber = document.getElementById('part-supply-po').value;
+            if (qty > 0) {
+                const { doc, runTransaction } = window.firebase;
+                const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, id);
+                try {
+                    await runTransaction(window.db, async (transaction) => {
+                        const partDoc = await transaction.get(partRef);
+                        if (partDoc.exists()) {
+                            const newQuantity = Number(partDoc.data().quantity) + qty;
+                            const newHistory = partDoc.data().history || [];
+                            newHistory.push({
+                                date: new Date().toISOString().slice(0,10),
+                                type: 'approvisionnement',
+                                quantity: qty,
+                                details: `BC: ${poNumber}`
+                            });
+                            transaction.update(partRef, { quantity: newQuantity, history: newHistory });
+                        }
+                    });
+                    document.getElementById('part-supply-qty').value = '';
+                    document.getElementById('part-supply-po').value = '';
+                } catch (e) {
+                    alert("Erreur lors de l'ajout de l'approvisionnement.");
+                }
+            }
+        });
+
+        document.getElementById('part-detail-start').onchange = calculateDetails;
+        document.getElementById('part-detail-end').onchange = calculateDetails;
+        calculateDetails();
+        this.openModal('partDetailModal');
+    },
+    openModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
     },
     closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); },
     showQRCode(id) {
@@ -634,7 +859,7 @@ const GMAOApp = {
         const qrContainer = document.getElementById('qrCodeCanvas'); qrContainer.innerHTML = '';
         document.getElementById('qrEquipmentName').textContent = eq.name;
         new QRCode(qrContainer, { text: `gmao://equipment/${eq.id}`, width: 200, height: 200 });
-        document.getElementById('qrModal').classList.add('active');
+        this.openModal('qrModal');
     },
     toggleTheme() { const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark'; this.applyTheme(newTheme); localStorage.setItem('gmao-theme', newTheme); },
     applyTheme(theme) {
@@ -656,6 +881,7 @@ const GMAOApp = {
             const { signOut } = window.firebase;
             signOut(window.auth);
         });
+        document.getElementById('whatsapp-btn').addEventListener('click', () => this.openModal('whatsappModal'));
         window.addEventListener('hashchange', () => this.navigateTo(window.location.hash));
         document.querySelector('.bottom-nav').addEventListener('click', e => { const navItem = e.target.closest('.nav-item'); if (navItem) { e.preventDefault(); this.navigateTo(navItem.getAttribute('href')); } });
         document.getElementById('fab-add-button').addEventListener('click', () => { const page = (window.location.hash || '#dashboard').substring(1); if (page !== 'dashboard' && page !== '') this.openForm(page); });
@@ -667,7 +893,8 @@ const GMAOApp = {
             const type = listItem.dataset.type; const id = listItem.dataset.id;
             switch(type) {
                 case 'technicians': this.showTechnicianStats(id); break;
-                case 'equipments': this.showEquipmentStats(id); break;
+                case 'equipments': this.showEquipmentDetails(id); break;
+                case 'parts': this.showPartDetails(id); break;
                 default: this.openForm(type, id); break;
             }
         });
@@ -723,6 +950,11 @@ const GMAOApp = {
             }
         }
     },
+    
+    updateLowStockNotification() {
+        const needsReorder = this.data.parts.some(p => Number(p.quantity) <= Number(p.minQuantity));
+        document.querySelector('.nav-item[href="#parts"] .notification-dot').style.display = needsReorder ? 'block' : 'none';
+    },
 
     async addTestData() {
         if (!this.currentUser) return alert("Vous devez être connecté pour ajouter des données.");
@@ -732,10 +964,10 @@ const GMAOApp = {
         const testData = {
             equipments: [ { name: "Presse Hydraulique P1", location: "Atelier A" }, { name: "Robot de soudure R2", location: "Ligne 3" } ],
             technicians: [ { name: "Jean Dupont", specialty: "Mécanique" }, { name: "Amina El Fassi", specialty: "Électronique" } ],
-            parts: [ { name: "Filtre à huile H-123", reference: "F-5540", supplier: "Fournisseur A", quantity: 12, minQuantity: 5, delaiLivraison: 3 }, { name: "Roulement 6204-2RS", reference: "R-6204", supplier: "Fournisseur B", quantity: 3, minQuantity: 4, delaiLivraison: 7 } ],
+            parts: [ { name: "Filtre à huile H-123", reference: "F-5540", supplier: "Fournisseur A", quantity: 12, minQuantity: 5, delaiLivraison: 3, unitPrice: 150.50 }, { name: "Roulement 6204-2RS", reference: "R-6204", supplier: "Fournisseur B", quantity: 3, minQuantity: 4, delaiLivraison: 7, unitPrice: 80 } ],
             interventions: [
-                { desc: "Panne moteur (test)", type: "Corrective", date: "2025-08-15", status: "completed", downtimeStart: "2025-08-15T08:00", downtimeEnd: "2025-08-15T10:30" },
-                { desc: "Contrôle préventif (test)", type: "Préventive", date: "2025-08-20", status: "completed", downtimeStart: "2025-08-20T09:00", downtimeEnd: "2025-08-20T10:00" },
+                { otNumber: `OT-${Date.now() + 1}`, desc: "Panne moteur (test)", type: "Corrective", date: "2025-08-15", status: "completed", downtimeStart: "2025-08-15T08:00", downtimeEnd: "2025-08-15T10:30" },
+                { otNumber: `OT-${Date.now() + 2}`, desc: "Contrôle préventif (test)", type: "Préventive", date: "2025-08-20", status: "completed", downtimeStart: "2025-08-20T09:00", downtimeEnd: "2025-08-20T10:00" },
             ]
         };
         try {
@@ -758,5 +990,3 @@ window.GMAOApp = GMAOApp;
 </script>
 </body>
 </html>
-
-
