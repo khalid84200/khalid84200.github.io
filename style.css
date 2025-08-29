@@ -239,69 +239,17 @@ body {
 .auth-separator::before, .auth-separator::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-color); }
 .auth-separator:not(:empty)::before { margin-right: .25em; }
 .auth-separator:not(:empty)::after { margin-left: .25em; }
-.btn-google { background-color: #FFF; color: var(--dark-gray); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 10px; }
+.btn-google { 
+    background-color: #FFF; 
+    color: var(--dark-gray); 
+    border: 1px solid var(--border-color); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px;
+    margin-bottom: 10px;
+}
 .btn-google:hover { background-color: var(--light-bg); }
 .btn-google .fa-google { color: #DB4437; }
 @media (min-width: 480px) { .section-title { align-items: center; flex-wrap: nowrap; } }
-/* ... (tout le CSS existant) ... */
-
-.auth-separator { 
-    display: flex; 
-    align-items: center; 
-    text-align: center; 
-    color: var(--light-gray); 
-    margin: 20px 0; 
-}
-.auth-separator::before, .auth-separator::after { 
-    content: ''; 
-    flex: 1; 
-    border-bottom: 1px solid var(--border-color); 
-}
-.auth-separator:not(:empty)::before { margin-right: .25em; }
-.auth-separator:not(:empty)::after { margin-left: .25em; }
-
-.btn-google { 
-    background-color: #FFF; 
-    color: var(--dark-gray); 
-    border: 1px solid var(--border-color); 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.btn-google:hover { background-color: var(--light-bg); }
-.btn-google .fa-google { color: #DB4437; }
-
-/* ... (tout le CSS existant) ... */
-
-.auth-separator { 
-    display: flex; 
-    align-items: center; 
-    text-align: center; 
-    color: var(--light-gray); 
-    margin: 20px 0; 
-}
-.auth-separator::before, .auth-separator::after { 
-    content: ''; 
-    flex: 1; 
-    border-bottom: 1px solid var(--border-color); 
-}
-.auth-separator:not(:empty)::before { margin-right: .25em; }
-.auth-separator:not(:empty)::after { margin-left: .25em; }
-
-.btn-google { 
-    background-color: #FFF; 
-    color: var(--dark-gray); 
-    border: 1px solid var(--border-color); 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.btn-google:hover { background-color: var(--light-bg); }
-.btn-google .fa-google { color: #DB4437; }
-
-
 
