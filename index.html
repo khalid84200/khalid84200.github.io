@@ -9,9 +9,7 @@
     <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22GMAO Pro X%22,%22short_name%22:%22GMAO%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22#F4F7FC%22,%22theme_color%22:%22#4A90E2%22,%22icons%22:[{%22src%22:%22https://img.icons8.com/fluency/96/maintenance.png%22,%22sizes%22:%2296x96%22,%22type%22:%22image/png%22}]}">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -33,6 +31,12 @@
                 <p class="auth-error" id="signup-error-msg"></p>
                 <p class="auth-toggle-link" id="show-login">Déjà un compte ? Se connecter</p>
             </form>
+            
+            <div class="auth-separator"><span>OU</span></div>
+
+            <button id="google-signin-btn" class="btn btn-full btn-google"><i class="fab fa-google"></i> Continuer avec Google</button>
+            <p class="auth-toggle-link" id="guest-mode-btn" style="margin-top: 20px;">Explorer en tant qu'invité <i class="fas fa-arrow-right"></i></p>
+
         </div>
     </div>
 
@@ -47,13 +51,20 @@
         </header>
         <main class="page-container">
             <div class="page-content active" id="dashboard">
+                 <div class="card" id="guest-info-card" style="display: none; background-color: var(--warning-color); color: white;">
+                    <div class="section-title" style="color: white;"><i class="fas fa-info-circle"></i> Mode Démonstration</div>
+                    <p>Vous êtes en mode invité. Pour sauvegarder vos modifications, veuillez créer un compte gratuit.</p>
+                </div>
                 <div class="card" id="test-data-card" style="display: none;">
                     <div class="section-title"><i class="fas fa-database"></i> Base de données vide</div>
                     <p style="color: var(--light-gray); margin-bottom: 15px;">Cliquez pour ajouter des données de démo.</p>
                     <button id="add-test-data-btn" class="btn btn-full">Ajouter Données de Test</button>
                 </div>
                 <div class="card">
-                    <div class="section-title"><i class="fas fa-filter"></i> Filtrer</div>
+                    <div class="section-title">
+                        <div><i class="fas fa-filter"></i> Filtrer & Exporter</div>
+                        <button id="export-downtime-btn" class="btn btn-small"><i class="fas fa-download"></i> Exporter</button>
+                    </div>
                     <div class="date-filter-grid">
                         <div class="form-group" style="margin:0;"><label for="date-start">Début</label><input type="date" id="date-start" class="form-control"></div>
                         <div class="form-group" style="margin:0;"><label for="date-end">Fin</label><input type="date" id="date-end" class="form-control"></div>
@@ -61,7 +72,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <div class="section-title"><i class="fas fa-tachometer-alt"></i> KPI</div>
+                    <div class="section-title"><div><i class="fas fa-tachometer-alt"></i> KPI</div></div>
                     <div class="kpi-grid-pro">
                         <div class="kpi-gauge-container">
                             <canvas id="availabilityChart"></canvas>
@@ -77,17 +88,35 @@
                     </div>
                 </div>
                 <div class="card">
-                    <div class="section-title"><i class="fas fa-chart-bar"></i> Top 3 Machines (Temps d'arrêt)</div>
+                    <div class="section-title"><div><i class="fas fa-chart-bar"></i> Top 3 Machines (Temps d'arrêt)</div></div>
                     <canvas id="downtimeByEquipmentChart"></canvas>
                 </div>
                 <div class="card">
-                    <div class="section-title"><i class="fas fa-history"></i> Interventions récentes</div>
+                    <div class="section-title"><div><i class="fas fa-history"></i> Interventions récentes</div></div>
                     <ul class="item-list" id="recent-interventions-list"><div class="loading-message">Chargement...</div></ul>
                 </div>
             </div>
+            
             <div class="page-content" id="equipments"><input type="text" class="search-bar" id="equipment-search" placeholder="Rechercher..."><ul class="item-list" id="equipments-list"><div class="loading-message">Chargement...</div></ul></div>
-            <div class="page-content" id="interventions"><input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher..."><div class="card"><div class="section-title"><i class="fas fa-filter"></i> Filtrer</div><div class="date-filter-grid"><div class="form-group" style="margin:0;"><label for="intervention-date-start">Début</label><input type="date" id="intervention-date-start" class="form-control"></div><div class="form-group" style="margin:0;"><label for="intervention-date-end">Fin</label><input type="date" id="intervention-date-end" class="form-control"></div></div></div><div class="card"><div class="section-title"><i class="fas fa-chart-pie"></i> Ratio</div><div class="chart-container"><canvas id="ratioChartCanvas"></canvas></div></div><ul class="item-list" id="interventions-list"><div class="loading-message">Chargement...</div></ul></div>
-            <div class="page-content" id="parts"><input type="text" class="search-bar" id="part-search" placeholder="Rechercher..."><div class="card"><div class="section-title"><i class="fas fa-dollar-sign"></i> Valeur du Stock</div><h3 id="total-stock-value" style="text-align: center; color: var(--primary-color);">Calcul...</h3></div><div class="card"><div class="section-title"><i class="fas fa-filter"></i> Filtrer</div><div class="form-group"><label for="supplier-filter">Fournisseur</label><select id="supplier-filter" class="form-control"></select></div><div class="filter-toggle"><input type="checkbox" id="reorder-filter"><label for="reorder-filter">Afficher articles à commander</label></div></div><ul class="item-list" id="parts-list"><div class="loading-message">Chargement...</div></ul></div>
+            <div class="page-content" id="interventions"><input type="text" class="search-bar" id="intervention-search" placeholder="Rechercher..."><div class="card"><div class="section-title"><div><i class="fas fa-filter"></i> Filtrer</div></div><div class="date-filter-grid"><div class="form-group" style="margin:0;"><label for="intervention-date-start">Début</label><input type="date" id="intervention-date-start" class="form-control"></div><div class="form-group" style="margin:0;"><label for="intervention-date-end">Fin</label><input type="date" id="intervention-date-end" class="form-control"></div></div></div><div class="card"><div class="section-title"><div><i class="fas fa-chart-pie"></i> Ratio</div></div><div class="chart-container"><canvas id="ratioChartCanvas"></canvas></div></div><ul class="item-list" id="interventions-list"><div class="loading-message">Chargement...</div></ul></div>
+            
+            <div class="page-content" id="parts">
+                <input type="text" class="search-bar" id="part-search" placeholder="Rechercher...">
+                <div class="card">
+                    <div class="section-title">
+                         <div><i class="fas fa-calendar-alt"></i> Période pour Rapport</div>
+                         <button id="export-stock-btn" class="btn btn-small"><i class="fas fa-download"></i> Exporter</button>
+                    </div>
+                    <div class="date-filter-grid">
+                        <div class="form-group" style="margin:0;"><label for="stock-date-start">Début</label><input type="date" id="stock-date-start" class="form-control"></div>
+                        <div class="form-group" style="margin:0;"><label for="stock-date-end">Fin</label><input type="date" id="stock-date-end" class="form-control"></div>
+                    </div>
+                </div>
+                <div class="card"><div class="section-title"><div><i class="fas fa-dollar-sign"></i> Valeur du Stock</div></div><h3 id="total-stock-value" style="text-align: center; color: var(--primary-color);">Calcul...</h3></div>
+                <div class="card"><div class="section-title"><div><i class="fas fa-filter"></i> Filtrer les Pièces</div></div><div class="form-group"><label for="supplier-filter">Fournisseur</label><select id="supplier-filter" class="form-control"></select></div><div class="filter-toggle"><input type="checkbox" id="reorder-filter"><label for="reorder-filter">Afficher articles à commander</label></div></div>
+                <ul class="item-list" id="parts-list"><div class="loading-message">Chargement...</div></ul>
+            </div>
+            
             <div class="page-content" id="technicians"><input type="text" class="search-bar" id="technician-search" placeholder="Rechercher..."><ul class="item-list" id="technicians-list"><div class="loading-message">Chargement...</div></ul></div>
         </main>
         <div class="fab" id="fab-add-button"><i class="fas fa-plus"></i></div>
@@ -100,12 +129,13 @@
         <div class="modal" id="partDetailModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="partDetailModalTitle">Détails pièce</h3><span class="close-modal">&times;</span></div><div id="partDetailContent"></div></div></div>
         <div class="modal" id="whatsappModal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">Rejoindre la communauté</h3><span class="close-modal">&times;</span></div><div style="text-align: center; display: flex; flex-direction: column; gap: 15px;"><a href="https://chat.whatsapp.com/BNWATqvGwSIJ5a5jIZE80H" target="_blank" class="btn btn-full" style="background-color: #25D366;"><i class="fab fa-whatsapp"></i> Rejoindre le Groupe</a><a href="https://whatsapp.com/channel/0029Vb6TLcqEFeXjfGXHAe2v" target="_blank" class="btn btn-full" style="background-color: #25D366;"><i class="fas fa-bullhorn"></i> Suivre la Chaîne</a></div></div></div>
         <div class="modal" id="custom-alert-modal"><div class="modal-content"><h3 class="modal-title" id="custom-alert-title">Information</h3><p id="custom-alert-message" style="margin: 20px 0;"></p><div class="dialog-actions"><button id="custom-alert-ok" class="btn">OK</button></div></div></div>
-        <div class="modal" id="custom-confirm-modal"><div class="modal-content"><h3 class="modal-title" id="custom-confirm-title">Confirmation</h3><p id="custom-confirm-message" style="margin: 20px 0;"></p><div class="dialog-actions"><button id="custom-confirm-cancel" class="btn btn-danger">Annuler</button><button id="custom-confirm-ok" class="btn">Confirmer</button></div></div></div>
+        <div class="modal" id="custom-confirm-modal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title" id="custom-confirm-title">Confirmation</h3><p id="custom-confirm-message" style="margin: 20px 0;"></p><div class="dialog-actions"><button id="custom-confirm-cancel" class="btn btn-danger">Annuler</button><button id="custom-confirm-ok" class="btn">Confirmer</button></div></div></div>
+        <div class="modal" id="auth-prompt-modal"><div class="modal-content"><div class="modal-header"><h3 class="modal-title">Créez un compte pour continuer</h3><span class="close-modal">&times;</span></div><p style="margin: 20px 0; color: var(--light-gray);">Pour ajouter, modifier ou supprimer des données, veuillez créer un compte gratuit. Cela vous permettra de sauvegarder votre travail de manière sécurisée.</p><div class="dialog-actions" style="flex-direction: column; gap: 15px;"><button id="prompt-google-btn" class="btn btn-full btn-google"><i class="fab fa-google"></i> S'inscrire avec Google</button><button id="prompt-email-btn" class="btn btn-full">S'inscrire avec un e-mail</button></div></div></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    
-    <script src="app.js?v=1.1" type="module"></script>
+    <script src="app.js?v=2.6" type="module"></script>
 </body>
 </html>
+
