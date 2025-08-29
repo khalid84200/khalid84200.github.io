@@ -139,13 +139,7 @@ const GMAOApp = {
         const correctiveCompleted = interventions.filter(i => i.type === 'Corrective' && i.status === 'completed' && i.downtimeStart && i.downtimeEnd);
         const totalDowntime = correctiveCompleted.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0);
         let availability = 100.0;
-        if (startDate && endDate) {
-            const totalPeriod = new Date(endDate) - new Date(startDate);
-            if (totalPeriod > 0) {
-                const uptime = Math.max(0, totalPeriod - totalDowntime);
-                availability = (uptime / totalPeriod) * 100;
-            }
-        }
+        if (startDate && endDate) { const totalPeriod = new Date(endDate) - new Date(startDate); if (totalPeriod > 0) { const uptime = Math.max(0, totalPeriod - totalDowntime); availability = (uptime / totalPeriod) * 100; } }
         document.getElementById('kpi-availability-value').textContent = `${availability.toFixed(1)}%`;
         this.createChart('availabilityChart', 'doughnut', { datasets: [{ data: [availability, 100 - availability], backgroundColor: [getComputedStyle(document.documentElement).getPropertyValue('--secondary-color'), getComputedStyle(document.documentElement).getPropertyValue('--border-color')], borderWidth: 0, cutout: '70%' }] }, { plugins: { tooltip: { enabled: false } } });
         const mttr = correctiveCompleted.length > 0 ? totalDowntime / correctiveCompleted.length : 0;
@@ -180,9 +174,14 @@ const GMAOApp = {
             case 'parts': item = id ? this.data.parts.find(p => p.id === id) : {}; title = id ? 'Modifier Pièce' : 'Nouvelle Pièce'; html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Référence</label><input type="text" name="reference" class="form-control" value="${item.reference || ''}"></div><div class="form-group"><label>Fournisseur</label><input type="text" name="supplier" class="form-control" value="${item.supplier || ''}"></div><div class="form-group"><label>Prix Unitaire (HT)</label><input type="number" step="0.01" name="unitPrice" class="form-control" value="${item.unitPrice || 0}"></div><div class="form-group"><label>Quantité</label><input type="number" name="quantity" class="form-control" value="${item.quantity || 0}" required ${id ? 'readonly' : ''}></div><div class="form-group"><label>Quantité Minimum</label><input type="number" name="minQuantity" class="form-control" value="${item.minQuantity || 0}" required></div><div class="form-group"><label>Délai Livraison (jours)</label><input type="number" name="delaiLivraison" class="form-control" value="${item.delaiLivraison || 0}"></div>`; break;
             default: const typeLabels = { equipments: 'Équipement', technicians: 'Technicien' }; title = id ? `Modifier ${typeLabels[type]}` : `Nouveau ${typeLabels[type]}`; item = id ? this.data[type].find(e => e.id === id) : {}; const fields = { equipments: [{label: 'Nom', name: 'name'}, {label: 'Localisation', name: 'location'}], technicians: [{label: 'Nom', name: 'name'}, {label: 'Spécialité', name: 'specialty'}] }; html = `<input type="hidden" name="id" value="${item.id || ''}">`; fields[type].forEach(field => { html += `<div class="form-group"><label>${field.label}</label><input type="text" name="${field.name}" class="form-control" value="${item[field.name] || ''}" required></div>`; }); break;
         }
-        form.innerHTML = html + `<button type="submit" class="btn btn-full">Enregistrer</button>${id ? `<button type="button" class="btn btn-full btn-danger" style="margin-top:10px;" onclick="GMAOApp.deleteItem('${type}', '${id}')">Supprimer</button>` : ''}`;
+        form.innerHTML = html + `<button type="submit" class="btn btn-full">Enregistrer</button>${id ? `<button type="button" id="form-delete-btn" class="btn btn-full btn-danger" style="margin-top:10px;">Supprimer</button>` : ''}`;
         if(id){ Object.keys(item).forEach(key => { if(form.elements[key]) form.elements[key].value = item[key]; }); if (type === 'interventions' && item.partsUsed) { this.prefillUsedParts(item.partsUsed); } }
         if (type === 'interventions') this.setupPartSearch();
+        
+        if (id) {
+            document.getElementById('form-delete-btn').addEventListener('click', () => this.deleteItem(type, id));
+        }
+
         modalTitle.textContent = title; form.dataset.type = type; this.openModal('formModal');
     },
     showTechnicianStats(id) { const technicien = this.data.technicians.find(t => t.id === id); if (!technicien) return; const interventionsFiltrees = this.getFilteredInterventions(this.dashboardFilters); const techInterventions = interventionsFiltrees.filter(i => i.techId === id && i.status === 'completed' && i.downtimeStart && i.downtimeEnd); const totalWorkTime = techInterventions.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0); const uniqueWorkDays = new Set(techInterventions.map(i => i.date)).size; const workdayInMillis = (8 * 60 - 45) * 60 * 1000; const totalWorkableTime = uniqueWorkDays * workdayInMillis; const workloadPercentage = totalWorkableTime > 0 ? (totalWorkTime / totalWorkableTime) * 100 : 0; document.getElementById('statsModalTitle').textContent = `Stats de ${technicien.name}`; document.getElementById('statsTotalTime').textContent = this.formatDuration(totalWorkTime, true); document.getElementById('statsWorkload').textContent = `${workloadPercentage.toFixed(1)}%`; this.openModal('statsModal'); },
@@ -203,7 +202,6 @@ const GMAOApp = {
         document.getElementById('mainForm').addEventListener('submit', this.handleSubmit.bind(this));
         document.querySelector('.theme-switcher').addEventListener('click', this.toggleTheme.bind(this));
         
-        // CORRECTION : Le listener pour les clics sur les listes et les icônes
         document.querySelector('.app-container').addEventListener('click', e => {
             const actionIcon = e.target.closest('.action-icon');
             const listItem = e.target.closest('.list-item-clickable');
@@ -229,7 +227,6 @@ const GMAOApp = {
             }
         });
         
-        // CORRECTION : Le listener du bouton de test est maintenant attaché une seule et unique fois
         document.getElementById('add-test-data-btn').addEventListener('click', () => this.addTestData(), { once: true });
     },
     setupPartSearch() {
