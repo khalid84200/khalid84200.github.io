@@ -1,7 +1,18 @@
-// Importations Firebase (versions mises à jour)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+// Importations Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+import { getFirestore, collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+import { 
+    getAuth, 
+    onAuthStateChanged, 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut, 
+    signInAnonymously, 
+    GoogleAuthProvider, 
+    signInWithPopup, 
+    signInWithRedirect, 
+    getRedirectResult
+} from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
 // Configuration Firebase
 const firebaseConfig = {
@@ -13,17 +24,43 @@ const firebaseConfig = {
     appId: "1:279000639370:web:6c04f86ba8dc82d097ca73"
 };
 
+// --- LOGIQUE DE DÉMARRAGE ROBUSTE ---
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// On attache l'observateur d'état d'authentification une seule fois.
+// Il deviendra notre unique "source de vérité".
+onAuthStateChanged(auth, (user) => {
+    document.getElementById('loader').style.display = 'none';
+    if (user) {
+        GMAOApp.startAppWithUser(user);
+    } else {
+        GMAOApp.showLoginScreen();
+    }
+});
+
+// En parallèle, on traite le résultat d'une éventuelle redirection.
+// getRedirectResult est appelé à chaque chargement de page. S'il n'y a pas
+// de redirection en cours, il ne fait rien. Sinon, il complète l'authentification.
+getRedirectResult(auth).catch(error => {
+    console.error("Erreur lors du traitement de la redirection :", error);
+    GMAOApp.showAlert(`Erreur de connexion : ${error.message}`);
+}).finally(() => {
+    // Nettoyage de l'indicateur de session quoi qu'il arrive.
+    sessionStorage.removeItem('pendingGoogleAuth');
+});
+
 
 enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code == 'failed-precondition') { console.warn("Persistance non activée, plusieurs onglets ouverts ?"); } 
+    if (err.code == 'failed-precondition') { console.warn("Conflit de versions Firestore détecté. La persistance sera désactivée pour cette session."); } 
     else if (err.code == 'unimplemented') { console.warn("Le navigateur ne supporte pas la persistance."); }
 });
 
 window.db = db;
-window.auth = getAuth(app); 
-window.firebase = { collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithCredential };
+window.auth = auth;
+window.firebase = { collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult };
 
 const GMAOApp = {
     data: { equipments: [], technicians: [], interventions: [], parts: [] },
@@ -32,52 +69,103 @@ const GMAOApp = {
     charts: {},
     currentUser: null,
     unsubscribeListeners: [],
+    isAuthenticating: false, // Flag pour éviter les doubles authentifications
     
-    init() {
-        this.setupAuthUi();
-        this.applyTheme(localStorage.getItem('gmao-theme') || 'light');
+    startAppWithUser(user) {
+        this.currentUser = user;
+        this.isAuthenticating = false; // Réinitialiser le flag
+        sessionStorage.removeItem('pendingGoogleAuth'); // Nettoyage final
+        this.startApp();
     },
 
-    setupAuthUi() {
-        onAuthStateChanged(window.auth, user => { if (user) { this.currentUser = user; this.startApp(); } else { this.currentUser = null; this.showLoginScreen(); } });
+    showLoginScreen() {
+        document.querySelector('.app-container').style.display = 'none';
+        document.getElementById('auth-container').style.display = 'flex';
+        this.unsubscribeListeners.forEach(unsub => unsub());
+        this.unsubscribeListeners = [];
+        this.isAuthenticating = false; // Réinitialiser le flag
+        this.setupAuthListeners();
+    },
+    
+    setupAuthListeners() {
+        if (this.authListenersAttached) return;
         document.getElementById('login-form').addEventListener('submit', e => this.handleLogin(e));
         document.getElementById('signup-form').addEventListener('submit', e => this.handleSignup(e));
         document.getElementById('show-signup').addEventListener('click', () => { document.getElementById('login-form').style.display = 'none'; document.getElementById('signup-form').style.display = 'block'; });
         document.getElementById('show-login').addEventListener('click', () => { document.getElementById('signup-form').style.display = 'none'; document.getElementById('login-form').style.display = 'block'; });
         document.getElementById('google-signin-btn').addEventListener('click', () => this.handleGoogleLogin());
         document.getElementById('guest-mode-btn').addEventListener('click', () => this.handleGuestLogin());
+        this.authListenersAttached = true;
     },
 
-    async handleGuestLogin() { try { await signInAnonymously(window.auth); } catch (error) { console.error("Erreur de connexion anonyme", error); this.showAlert("Impossible de démarrer le mode invité. Veuillez réessayer."); } },
+    async handleGuestLogin() { try { await signInAnonymously(auth); } catch (error) { console.error("Erreur de connexion anonyme", error); this.showAlert("Impossible de démarrer le mode invité. Veuillez réessayer."); } },
     
     async handleGoogleLogin() {
+        if (this.isAuthenticating) {
+            console.log("Authentification déjà en cours...");
+            return;
+        }
+        this.isAuthenticating = true;
         const provider = new GoogleAuthProvider();
+    
+        const performRedirect = () => {
+            sessionStorage.setItem('pendingGoogleAuth', 'true');
+            signInWithRedirect(auth, provider).catch(err => {
+                 this.showAlert(`La redirection a échoué: ${err.message}`);
+                 this.isAuthenticating = false; // Important: réinitialiser en cas d'échec
+                 sessionStorage.removeItem('pendingGoogleAuth');
+            });
+        };
+    
+        // Stratégie universelle : essayer le popup d'abord, car c'est une meilleure UX.
+        // Si le popup est bloqué ou fermé, utiliser la redirection comme plan B.
         try {
-            const result = await signInWithPopup(window.auth, provider);
-            if (this.currentUser && this.currentUser.isAnonymous) {
-                const credential = GoogleAuthProvider.credentialFromResult(result);
-                // Il faudra une logique pour migrer les données anonymes vers le nouveau compte
-                await linkWithCredential(this.currentUser, credential);
-                this.showAlert("Votre compte invité a été lié à votre compte Google !");
+            await signInWithPopup(auth, provider);
+            // Si on arrive ici, le popup a réussi. `onAuthStateChanged` sera déclenché.
+            // isAuthenticating sera réinitialisé dans startAppWithUser.
+        } catch (error) {
+            // Gérer les erreurs de popup
+            if (error.code === 'auth/popup-blocked' || 
+                error.code === 'auth/cancelled-popup-request' ||
+                error.code === 'auth/popup-closed-by-user') {
+                
+                // Le popup a échoué, on tente la redirection.
+                console.log("Le popup a été bloqué ou fermé. Tentative avec une redirection.");
+                performRedirect();
+            } else {
+                // Pour les autres erreurs (réseau, compte désactivé, etc.)
+                console.error("Erreur de connexion popup Google :", error);
+                this.showAlert(`Erreur de connexion : ${error.message}`);
+                this.isAuthenticating = false;
             }
-        } catch (error) { console.error("Erreur de connexion Google", error); this.showAlert("La connexion avec Google a échoué. Veuillez réessayer."); }
+        }
     },
 
-    async handleLogin(e) { e.preventDefault(); const { signInWithEmailAndPassword } = window.firebase; const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value; const errorMsg = document.getElementById('login-error-msg'); const button = e.target.querySelector('button'); button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; errorMsg.textContent = ''; try { await signInWithEmailAndPassword(window.auth, email, password); } catch (error) { errorMsg.textContent = "Email ou mot de passe incorrect."; button.disabled = false; button.textContent = 'Se connecter'; } },
-    async handleSignup(e) { e.preventDefault(); const { createUserWithEmailAndPassword } = window.firebase; const email = document.getElementById('signup-email').value; const password = document.getElementById('signup-password').value; const errorMsg = document.getElementById('signup-error-msg'); const button = e.target.querySelector('button'); button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; errorMsg.textContent = ''; try { await createUserWithEmailAndPassword(window.auth, email, password); } catch (error) { errorMsg.textContent = "Erreur : mot de passe trop court ou email invalide."; button.disabled = false; button.textContent = 'Créer un compte'; } },
-    showLoginScreen() { document.querySelector('.app-container').style.display = 'none'; document.getElementById('auth-container').style.display = 'flex'; this.unsubscribeListeners.forEach(unsub => unsub()); this.unsubscribeListeners = []; },
-    startApp() { document.getElementById('auth-container').style.display = 'none'; document.querySelector('.app-container').style.display = 'block'; this.setupEventListeners(); this.attachRealtimeListeners(); },
+    async handleLogin(e) { e.preventDefault(); const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value; const errorMsg = document.getElementById('login-error-msg'); const button = e.target.querySelector('button'); button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; errorMsg.textContent = ''; try { await signInWithEmailAndPassword(auth, email, password); } catch (error) { errorMsg.textContent = "Email ou mot de passe incorrect."; button.disabled = false; button.textContent = 'Se connecter'; this.isAuthenticating = false; } },
+    async handleSignup(e) { e.preventDefault(); const email = document.getElementById('signup-email').value; const password = document.getElementById('signup-password').value; const errorMsg = document.getElementById('signup-error-msg'); const button = e.target.querySelector('button'); button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; errorMsg.textContent = ''; try { await createUserWithEmailAndPassword(auth, email, password); } catch (error) { errorMsg.textContent = "Erreur : mot de passe trop court ou email invalide."; button.disabled = false; button.textContent = 'Créer un compte'; this.isAuthenticating = false; } },
+    
+    startApp() {
+        document.getElementById('auth-container').style.display = 'none';
+        document.querySelector('.app-container').style.display = 'block';
+        this.applyTheme(localStorage.getItem('gmao-theme') || 'light');
+        this.setupEventListeners();
+        this.attachRealtimeListeners();
+    },
     
     async attachRealtimeListeners() {
         if (!this.currentUser) return;
-        if (this.currentUser.isAnonymous) {
-             const userMetaRef = doc(db, `users/${this.currentUser.uid}/metadata/status`);
-             const userDoc = await getDoc(userMetaRef);
-             if (!userDoc.exists()) {
-                 await this.addTestData();
-                 await setDoc(userMetaRef, { initialized: true });
-             }
+
+        const userMetaRef = doc(db, `users/${this.currentUser.uid}/metadata/status`);
+        try {
+            const userDoc = await getDoc(userMetaRef);
+            if (!userDoc.exists()) {
+                await this.addTestData(); 
+                await setDoc(userMetaRef, { initialized: true });
+            }
+        } catch (e) {
+            console.error("Erreur lors de la vérification/création des données utilisateur : ", e);
         }
+
         this.unsubscribeListeners.forEach(unsub => unsub());
         this.unsubscribeListeners = [];
         const collections = ['equipments', 'technicians', 'interventions', 'parts'];
@@ -86,9 +174,13 @@ const GMAOApp = {
             const unsub = onSnapshot(collection(db, basePath, colName), (snapshot) => {
                 this.data[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this.renderCurrentPage();
+            }, (error) => {
+                console.error(`Erreur d'écoute pour la collection ${colName}:`, error);
+                this.showAlert("Erreur de connexion à la base de données. Veuillez vérifier vos règles de sécurité Firestore.");
             });
             this.unsubscribeListeners.push(unsub);
         });
+        
         this.navigateTo(window.location.hash || '#dashboard');
     },
     
@@ -114,7 +206,7 @@ const GMAOApp = {
         if (this.currentUser && this.currentUser.isAnonymous) {
             this.openModal('auth-prompt-modal');
             document.getElementById('prompt-google-btn').onclick = () => { this.closeModal('auth-prompt-modal'); this.handleGoogleLogin(); };
-            document.getElementById('prompt-email-btn').onclick = () => { this.closeModal('auth-prompt-modal'); signOut(window.auth); };
+            document.getElementById('prompt-email-btn').onclick = () => { this.closeModal('auth-prompt-modal'); signOut(auth); };
             return false;
         }
         return true;
@@ -152,7 +244,6 @@ const GMAOApp = {
         submitButton.disabled = true;
         submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
 
-        const { doc, addDoc, setDoc, collection, runTransaction } = window.firebase;
         const id = formData.get('id');
         let itemData = Object.fromEntries(formData.entries());
         
@@ -172,7 +263,7 @@ const GMAOApp = {
         try {
             if (type === 'parts' && !id && itemData.reference) { if (this.data.parts.find(p => p.reference && p.reference.toLowerCase() === itemData.reference.toLowerCase())) { this.showAlert("Erreur : Une pièce avec cette référence existe déjà."); throw new Error("Duplicate reference"); } }
             if (type === 'interventions') {
-                await runTransaction(window.db, async (transaction) => {
+                await runTransaction(db, async (transaction) => {
                     const oldIntervention = id ? this.data.interventions.find(i => i.id === id) : null;
                     const oldPartsUsed = oldIntervention?.partsUsed || {};
                     const wasCompleted = oldIntervention?.status === 'completed';
@@ -183,7 +274,7 @@ const GMAOApp = {
                         const newQty = isNowCompleted ? (newPartsUsed[partId] || 0) : 0;
                         const change = oldQty - newQty;
                         if (change !== 0) {
-                            const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, partId);
+                            const partRef = doc(db, `users/${this.currentUser.uid}/parts`, partId);
                             const partDoc = await transaction.get(partRef);
                             if (partDoc.exists()) {
                                 const currentQuantity = Number(partDoc.data().quantity);
@@ -192,12 +283,12 @@ const GMAOApp = {
                             }
                         }
                     }
-                    if (id) { transaction.set(doc(window.db, path, id), itemData, { merge: true }); }
-                    else { itemData.otNumber = `OT-${Date.now()}`; transaction.set(doc(collection(window.db, path)), itemData); }
+                    if (id) { transaction.set(doc(db, path, id), itemData, { merge: true }); }
+                    else { itemData.otNumber = `OT-${Date.now()}`; transaction.set(doc(collection(db, path)), itemData); }
                 });
             } else {
-                if (id) { await setDoc(doc(window.db, path, id), itemData, { merge: true }); }
-                else { await addDoc(collection(window.db, path), itemData); }
+                if (id) { await setDoc(doc(db, path, id), itemData, { merge: true }); }
+                else { await addDoc(collection(db, path), itemData); }
             }
             this.closeModal('formModal');
         } catch (e) {
@@ -210,7 +301,7 @@ const GMAOApp = {
     async deleteItem(type, id) { 
         const canProceed = await this.checkAuthAndPrompt();
         if (!canProceed) return;
-        const confirmed = await this.showConfirm('Voulez-vous vraiment supprimer cet élément ?'); if (!confirmed) return; const { doc, deleteDoc } = window.firebase; const path = `users/${this.currentUser.uid}/${type}/${id}`; try { await deleteDoc(doc(window.db, path)); this.closeModal('formModal'); } catch (e) { console.error("Erreur Firestore: ", e); this.showAlert("Une erreur est survenue."); } 
+        const confirmed = await this.showConfirm('Voulez-vous vraiment supprimer cet élément ?'); if (!confirmed) return; const path = `users/${this.currentUser.uid}/${type}/${id}`; try { await deleteDoc(doc(db, path)); this.closeModal('formModal'); } catch (e) { console.error("Erreur Firestore: ", e); this.showAlert("Une erreur est survenue."); } 
     },
     
     getFilteredInterventions(filters) { const { startDate, endDate } = filters; if (!startDate && !endDate) return this.data.interventions; return this.data.interventions.filter(i => { const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }); },
@@ -330,7 +421,7 @@ const GMAOApp = {
     openForm(type, id = null) {
         const form = document.getElementById('mainForm'); const modalTitle = document.getElementById('modalTitle'); let html = '', title = '', item = null; const eqOptions = this.data.equipments.map(e => `<option value="${e.id}">${e.uniqueId || e.name}</option>`).join(''); const techOptions = this.data.technicians.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
         switch (type) {
-            case 'interventions': item = id ? this.data.interventions.find(i => i.id === id) : {}; title = id ? 'Modifier Intervention' : 'Nouvelle Intervention'; html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Description</label><input type="text" name="desc" class="form-control" value="${item.desc || ''}" required></div><div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div><div class="form-group"><label>Type</label><select name="type" class="form-control"><option value="Préventive">Préventive</option><option value="Corrective">Corrective</option></select></div><div class="form-group"><label>Statut</label><select name="status" class="form-control"><option value="planned">planned</option><option value="progress">progress</option><option value="completed">completed</option></select></div><div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div><div class="form-group"><label>Technicien</label><select name="techId" class="form-control">${techOptions}</select></div><div class="form-group"><label>Pièces utilisées</label><div id="used-parts-container"></div><input type="text" id="part-search-input" class="form-control" placeholder="Rechercher une pièce..."><div class="parts-search-results" id="parts-search-results"></div></div><hr style="border: 1px solid var(--border-color); margin: 20px 0;"><div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div><div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>`; break;
+            case 'interventions': item = id ? this.data.interventions.find(i => i.id === id) : {}; title = id ? 'Modifier Intervention' : 'Nouvelle Intervention'; html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Description</label><input type="text" name="desc" class.form-control" value="${item.desc || ''}" required></div><div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div><div class="form-group"><label>Type</label><select name="type" class="form-control"><option value="Préventive">Préventive</option><option value="Corrective">Corrective</option></select></div><div class="form-group"><label>Statut</label><select name="status" class="form-control"><option value="planned">planned</option><option value="progress">progress</option><option value="completed">completed</option></select></div><div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div><div class="form-group"><label>Technicien</label><select name="techId" class="form-control">${techOptions}</select></div><div class="form-group"><label>Pièces utilisées</label><div id="used-parts-container"></div><input type="text" id="part-search-input" class="form-control" placeholder="Rechercher une pièce..."><div class="parts-search-results" id="parts-search-results"></div></div><hr style="border: 1px solid var(--border-color); margin: 20px 0;"><div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div><div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>`; break;
             case 'parts': item = id ? this.data.parts.find(p => p.id === id) : {}; title = id ? 'Modifier Pièce' : 'Nouvelle Pièce'; html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Référence</label><input type="text" name="reference" class="form-control" value="${item.reference || ''}"></div><div class="form-group"><label>Fournisseur</label><input type="text" name="supplier" class="form-control" value="${item.supplier || ''}"></div><div class="form-group"><label>Prix Unitaire (HT)</label><input type="number" step="0.01" name="unitPrice" class="form-control" value="${item.unitPrice || 0}"></div><div class="form-group"><label>Quantité</label><input type="number" name="quantity" class="form-control" value="${item.quantity || 0}" required ${id ? 'readonly' : ''}></div><div class="form-group"><label>Quantité Minimum</label><input type="number" name="minQuantity" class="form-control" value="${item.minQuantity || 0}" required></div><div class="form-group"><label>Délai Livraison (jours)</label><input type="number" name="delaiLivraison" class="form-control" value="${item.delaiLivraison || 0}"></div>`; break;
             case 'equipments': item = id ? this.data.equipments.find(e => e.id === id) : {}; title = id ? 'Modifier Équipement' : 'Nouvel Équipement'; html = `<input type="hidden" name="id" value="${item.id || ''}"><div class="form-group"><label>Nom</label><input type="text" name="name" class="form-control" value="${item.name || ''}" required></div><div class="form-group"><label>Identifiant (ID)</label><input type="text" name="uniqueId" class="form-control" value="${item.uniqueId || ''}" required></div><div class="form-group"><label>Numéro de Série</label><input type="text" name="serialNumber" class="form-control" value="${item.serialNumber || ''}"></div><div class="form-group"><label>Localisation</label><input type="text" name="location" class="form-control" value="${item.location || ''}"></div>`; break;
             default: const typeLabels = { technicians: 'Technicien' }; title = id ? `Modifier ${typeLabels[type]}` : `Nouveau ${typeLabels[type]}`; item = id ? this.data[type].find(e => e.id === id) : {}; const fields = { technicians: [{label: 'Nom', name: 'name'}, {label: 'Spécialité', name: 'specialty'}] }; html = `<input type="hidden" name="id" value="${item.id || ''}">`; fields[type].forEach(field => { html += `<div class="form-group"><label>${field.label}</label><input type="text" name="${field.name}" class="form-control" value="${item[field.name] || ''}" required></div>`; }); break;
@@ -348,7 +439,7 @@ const GMAOApp = {
 
     showTechnicianStats(id) { const technicien = this.data.technicians.find(t => t.id === id); if (!technicien) return; const interventionsFiltrees = this.getFilteredInterventions(this.dashboardFilters); const techInterventions = interventionsFiltrees.filter(i => i.techId === id && i.status === 'completed' && i.downtimeStart && i.downtimeEnd); const totalWorkTime = techInterventions.reduce((acc, i) => acc + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)), 0); const uniqueWorkDays = new Set(techInterventions.map(i => i.date)).size; const workdayInMillis = (8 * 60 - 45) * 60 * 1000; const totalWorkableTime = uniqueWorkDays * workdayInMillis; const workloadPercentage = totalWorkableTime > 0 ? (totalWorkTime / totalWorkableTime) * 100 : 0; document.getElementById('statsModalTitle').textContent = `Stats de ${technicien.name}`; document.getElementById('statsTotalTime').textContent = this.formatDuration(totalWorkTime, true); document.getElementById('statsWorkload').textContent = `${workloadPercentage.toFixed(1)}%`; this.openModal('statsModal'); },
     showEquipmentDetails(id) { const equipment = this.data.equipments.find(e => e.id === id); if (!equipment) return; document.getElementById('equipmentDetailModalTitle').textContent = `Détails pour ${equipment.name}`; const contentEl = document.getElementById('equipmentDetailContent'); contentEl.innerHTML = `<div class="date-filter-grid"><div class="form-group" style="margin:0;"><label>Début</label><input type="date" id="equip-detail-start" class="form-control"></div><div class="form-group" style="margin:0;"><label>Fin</label><input type="date" id="equip-detail-end" class="form-control"></div></div><h4 style="margin-top: 20px;">Temps d'arrêt total</h4><p id="equip-detail-downtime">--</p><h4 style="margin-top: 20px;">Pièces consommées</h4><div id="equip-detail-parts"></div>`; const calculateDetails = () => { const startDate = document.getElementById('equip-detail-start').value; const endDate = document.getElementById('equip-detail-end').value; const relevantInterventions = this.data.interventions.filter(i => { if (i.eqId !== id || i.status !== 'completed') return false; const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }); const totalDowntime = relevantInterventions.reduce((total, i) => { if (i.downtimeStart && i.downtimeEnd) { return total + (new Date(i.downtimeEnd) - new Date(i.downtimeStart)); } return total; }, 0); document.getElementById('equip-detail-downtime').textContent = this.formatDuration(totalDowntime, true); const partsListEl = document.getElementById('equip-detail-parts'); let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>OT</th><th>Pièce</th><th>Qté</th></tr>'; let partsFound = false; relevantInterventions.forEach(i => { if(i.partsUsed && Object.keys(i.partsUsed).length > 0) { partsFound = true; for (const partId in i.partsUsed) { const part = this.data.parts.find(p => p.id === partId); tableHTML += `<tr><td>${new Date(i.date).toLocaleDateString()}</td><td>${i.otNumber || '--'}</td><td>${part ? part.name : 'N/A'}</td><td>${i.partsUsed[partId]}</td></tr>`; } } }); tableHTML += '</table>'; partsListEl.innerHTML = partsFound ? tableHTML : '<p>Aucune pièce consommée.</p>'; }; document.getElementById('equip-detail-start').onchange = calculateDetails; document.getElementById('equip-detail-end').onchange = calculateDetails; calculateDetails(); this.openModal('equipmentDetailModal'); },
-    showPartDetails(id) { const part = this.data.parts.find(p => p.id === id); if (!part) return; document.getElementById('partDetailModalTitle').textContent = `Détails pour ${part.name}`; const contentEl = document.getElementById('partDetailContent'); contentEl.innerHTML = `<div class="date-filter-grid"><div class="form-group" style="margin:0;"><label>Début</label><input type="date" id="part-detail-start" class="form-control"></div><div class="form-group" style="margin:0;"><label>Fin</label><input type="date" id="part-detail-end" class="form-control"></div></div><div class="form-group" style="margin-top: 20px;"><label>Ajouter un approvisionnement</label><div style="display: flex; gap: 10px;"><input type="number" id="part-supply-qty" class="form-control" placeholder="Quantité"><input type="text" id="part-supply-po" class="form-control" placeholder="N° BC"><button id="add-supply-btn" class="btn"><i class="fas fa-plus"></i></button></div></div><h4 style="margin-top: 20px;">Historique des mouvements</h4><div id="part-detail-history"></div>`; const calculateDetails = () => { const startDate = document.getElementById('part-detail-start').value; const endDate = document.getElementById('part-detail-end').value; const consumptions = this.data.interventions.filter(i => { if (!i.partsUsed || !i.partsUsed[id] || i.status !== 'completed') return false; const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }).map(i => ({ date: i.date, type: 'Consommation', quantity: `-${i.partsUsed[id]}`, details: `${i.otNumber || 'N/A'} sur ${this.data.equipments.find(e => e.id === i.eqId)?.name || 'N/A'}` })); const supplies = (part.history || []).filter(h => { if (h.type !== 'approvisionnement') return false; const hDate = new Date(h.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && hDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (hDate > end) return false; } return true; }).map(h => ({ ...h, quantity: `+${h.quantity}` })); const history = [...consumptions, ...supplies].sort((a,b) => new Date(b.date) - new Date(a.date)); const historyEl = document.getElementById('part-detail-history'); if (history.length === 0) { historyEl.innerHTML = '<p>Aucun mouvement.</p>'; } else { let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>Type</th><th>Détails</th><th>Qté</th></tr>'; history.forEach(h => { tableHTML += `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${h.type}</td><td>${h.details}</td><td>${h.quantity}</td></tr>`; }); tableHTML += '</table>'; historyEl.innerHTML = tableHTML; } }; document.getElementById('add-supply-btn').addEventListener('click', async () => { const qty = parseInt(document.getElementById('part-supply-qty').value, 10); const poNumber = document.getElementById('part-supply-po').value; if (qty > 0) { const { doc, runTransaction } = window.firebase; const partRef = doc(window.db, `users/${this.currentUser.uid}/parts`, id); try { await runTransaction(window.db, async (transaction) => { const partDoc = await transaction.get(partRef); if (partDoc.exists()) { const newQuantity = Number(partDoc.data().quantity) + qty; const newHistory = partDoc.data().history || []; newHistory.push({ date: new Date().toISOString().slice(0,10), type: 'approvisionnement', quantity: qty, details: `BC: ${poNumber}` }); transaction.update(partRef, { quantity: newQuantity, history: newHistory }); } }); document.getElementById('part-supply-qty').value = ''; document.getElementById('part-supply-po').value = ''; } catch (e) { this.showAlert("Erreur."); } } }); document.getElementById('part-detail-start').onchange = calculateDetails; document.getElementById('part-detail-end').onchange = calculateDetails; calculateDetails(); this.openModal('partDetailModal'); },
+    showPartDetails(id) { const part = this.data.parts.find(p => p.id === id); if (!part) return; document.getElementById('partDetailModalTitle').textContent = `Détails pour ${part.name}`; const contentEl = document.getElementById('partDetailContent'); contentEl.innerHTML = `<div class="date-filter-grid"><div class="form-group" style="margin:0;"><label>Début</label><input type="date" id="part-detail-start" class="form-control"></div><div class="form-group" style="margin:0;"><label>Fin</label><input type="date" id="part-detail-end" class="form-control"></div></div><div class="form-group" style="margin-top: 20px;"><label>Ajouter un approvisionnement</label><div style="display: flex; gap: 10px;"><input type="number" id="part-supply-qty" class="form-control" placeholder="Quantité"><input type="text" id="part-supply-po" class="form-control" placeholder="N° BC"><button id="add-supply-btn" class="btn"><i class="fas fa-plus"></i></button></div></div><h4 style="margin-top: 20px;">Historique des mouvements</h4><div id="part-detail-history"></div>`; const calculateDetails = () => { const startDate = document.getElementById('part-detail-start').value; const endDate = document.getElementById('part-detail-end').value; const consumptions = this.data.interventions.filter(i => { if (!i.partsUsed || !i.partsUsed[id] || i.status !== 'completed') return false; const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }).map(i => ({ date: i.date, type: 'Consommation', quantity: `-${i.partsUsed[id]}`, details: `${i.otNumber || 'N/A'} sur ${this.data.equipments.find(e => e.id === i.eqId)?.name || 'N/A'}` })); const supplies = (part.history || []).filter(h => { if (h.type !== 'approvisionnement') return false; const hDate = new Date(h.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && hDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (hDate > end) return false; } return true; }).map(h => ({ ...h, quantity: `+${h.quantity}` })); const history = [...consumptions, ...supplies].sort((a,b) => new Date(b.date) - new Date(a.date)); const historyEl = document.getElementById('part-detail-history'); if (history.length === 0) { historyEl.innerHTML = '<p>Aucun mouvement.</p>'; } else { let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>Type</th><th>Détails</th><th>Qté</th></tr>'; history.forEach(h => { tableHTML += `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${h.type}</td><td>${h.details}</td><td>${h.quantity}</td></tr>`; }); tableHTML += '</table>'; historyEl.innerHTML = tableHTML; } }; document.getElementById('add-supply-btn').addEventListener('click', async () => { const qty = parseInt(document.getElementById('part-supply-qty').value, 10); const poNumber = document.getElementById('part-supply-po').value; if (qty > 0) { const partRef = doc(db, `users/${this.currentUser.uid}/parts`, id); try { await runTransaction(db, async (transaction) => { const partDoc = await transaction.get(partRef); if (partDoc.exists()) { const newQuantity = Number(partDoc.data().quantity) + qty; const newHistory = partDoc.data().history || []; newHistory.push({ date: new Date().toISOString().slice(0,10), type: 'approvisionnement', quantity: qty, details: `BC: ${poNumber}` }); transaction.update(partRef, { quantity: newQuantity, history: newHistory }); } }); document.getElementById('part-supply-qty').value = ''; document.getElementById('part-supply-po').value = ''; } catch (e) { this.showAlert("Erreur."); } } }); document.getElementById('part-detail-start').onchange = calculateDetails; document.getElementById('part-detail-end').onchange = calculateDetails; calculateDetails(); this.openModal('partDetailModal'); },
     closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); },
     showQRCode(id) { const eq = this.data.equipments.find(e => e.id === id); if(!eq) return; const qrContainer = document.getElementById('qrCodeCanvas'); qrContainer.innerHTML = ''; document.getElementById('qrEquipmentName').textContent = eq.name; new QRCode(qrContainer, { text: `gmao://equipment/${eq.id}`, width: 200, height: 200 }); this.openModal('qrModal'); },
     toggleTheme() { const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark'; this.applyTheme(newTheme); localStorage.setItem('gmao-theme', newTheme); },
@@ -356,7 +447,8 @@ const GMAOApp = {
     formatDuration(ms, long = false) { if (ms <= 0 || !ms) return long ? "0j 0h 0m" : "0m"; const days = Math.floor(ms / 86400000); const hours = Math.floor((ms % 86400000) / 3600000); const minutes = Math.floor((ms % 3600000) / 60000); if (long) return `${days}j ${hours}h ${minutes}m`; let result = ''; if (days > 0) result += `${days}j `; if (hours > 0) result += `${hours}h `; result += `${minutes}m`; return result.trim() || "0m"; },
     
     setupEventListeners() {
-        document.getElementById('logout-btn').addEventListener('click', () => { const { signOut } = window.firebase; signOut(window.auth); });
+        if (this.eventListenersAttached) return;
+        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
         document.getElementById('whatsapp-btn').addEventListener('click', () => this.openModal('whatsappModal'));
         window.addEventListener('hashchange', () => this.navigateTo(window.location.hash));
         document.querySelector('.bottom-nav').addEventListener('click', e => { const navItem = e.target.closest('.nav-item'); if (navItem) { e.preventDefault(); this.navigateTo(navItem.getAttribute('href')); } });
@@ -393,6 +485,7 @@ const GMAOApp = {
                 }
             }
         });
+        this.eventListenersAttached = true;
     },
     
     exportToCSV(dataRows, filename) {
@@ -463,18 +556,16 @@ const GMAOApp = {
     updateLowStockNotification() { const needsReorder = this.data.parts.some(p => Number(p.quantity) <= Number(p.minQuantity)); document.querySelector('.nav-item[href="#parts"] .notification-dot').style.display = needsReorder ? 'block' : 'none'; },
     
     async addTestData() {
-        if (!this.currentUser) return; // Sécurité supplémentaire
-        if (this.currentUser.isAnonymous) {
-            // Pas de bouton pour les invités, c'est automatique
-        } else if (document.getElementById('add-test-data-btn')) {
-            const btn = document.getElementById('add-test-data-btn');
+        if (!this.currentUser) return;
+        const btn = document.getElementById('add-test-data-btn');
+        if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ajout en cours...';
         }
 
-        const { writeBatch, doc, collection } = window.firebase; const batch = writeBatch(window.db); const basePath = `users/${this.currentUser.uid}`;
-        const eq1 = doc(collection(window.db, basePath, "equipments")); const eq2 = doc(collection(window.db, basePath, "equipments")); const eq3 = doc(collection(window.db, basePath, "equipments")); const eq4 = doc(collection(window.db, basePath, "equipments")); const eq5 = doc(collection(window.db, basePath, "equipments"));
-        const tech1 = doc(collection(window.db, basePath, "technicians")); const tech2 = doc(collection(window.db, basePath, "technicians")); const tech3 = doc(collection(window.db, basePath, "technicians"));
+        const batch = writeBatch(db); const basePath = `users/${this.currentUser.uid}`;
+        const eq1 = doc(collection(db, basePath, "equipments")); const eq2 = doc(collection(db, basePath, "equipments")); const eq3 = doc(collection(db, basePath, "equipments")); const eq4 = doc(collection(db, basePath, "equipments")); const eq5 = doc(collection(db, basePath, "equipments"));
+        const tech1 = doc(collection(db, basePath, "technicians")); const tech2 = doc(collection(db, basePath, "technicians")); const tech3 = doc(collection(db, basePath, "technicians"));
         const testData = {
             equipments: [ { id: eq1.id, name: "Presse Hydraulique P1", uniqueId: "PRE-001", serialNumber: "SN-A1B2", location: "Atelier A" }, { id: eq2.id, name: "Robot de soudure R2", uniqueId: "ROB-002", serialNumber: "SN-C3D4", location: "Ligne 3" }, { id: eq3.id, name: "Compresseur d'air C-500", uniqueId: "COMP-001", serialNumber: "SN-E5F6", location: "Salle machines" }, { id: eq4.id, name: "Pont Roulant PR-01", uniqueId: "PONT-001", serialNumber: "SN-G7H8", location: "Expédition" }, { id: eq5.id, name: "Four thermique FTT-8", uniqueId: "FOUR-001", serialNumber: "SN-I9J0", location: "Atelier B" } ],
             technicians: [ { id: tech1.id, name: "Jean Dupont", specialty: "Mécanique" }, { id: tech2.id, name: "Amina El Fassi", specialty: "Électronique" }, { id: tech3.id, name: "Marc Petit", specialty: "Hydraulique" } ],
@@ -488,10 +579,10 @@ const GMAOApp = {
             ]
         };
         try {
-            testData.equipments.forEach(item => batch.set(doc(window.db, basePath, "equipments", item.id), item));
-            testData.technicians.forEach(item => batch.set(doc(window.db, basePath, "technicians", item.id), item));
-            testData.parts.forEach(item => batch.set(doc(collection(window.db, basePath, "parts")), item));
-            testData.interventions.forEach(item => batch.set(doc(collection(window.db, basePath, "interventions")), item));
+            testData.equipments.forEach(item => batch.set(doc(db, basePath, "equipments", item.id), item));
+            testData.technicians.forEach(item => batch.set(doc(db, basePath, "technicians", item.id), item));
+            testData.parts.forEach(item => batch.set(doc(collection(db, basePath, "parts")), item));
+            testData.interventions.forEach(item => batch.set(doc(collection(db, basePath, "interventions")), item));
             await batch.commit();
             if(!this.currentUser.isAnonymous) {
                 this.showAlert("Données de test ajoutées avec succès !");
@@ -499,10 +590,3 @@ const GMAOApp = {
         } catch (e) { console.error("Erreur ajout données: ", e); if(!this.currentUser.isAnonymous){this.showAlert("Erreur lors de l'ajout des données.");} }
     }
 };
-
-// Lancement de l'application
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => GMAOApp.init());
-} else {
-    GMAOApp.init();
-}
