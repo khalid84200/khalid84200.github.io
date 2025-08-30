@@ -246,10 +246,38 @@ body {
     display: flex; 
     align-items: center; 
     justify-content: center; 
-    gap: 10px;
+    gap: 10px; 
     margin-bottom: 10px;
 }
 .btn-google:hover { background-color: var(--light-bg); }
-.btn-google .fa-google { color: #DB4437; }
+.btn-google .fa-google { color: #DB4337; } /* Note: J'ai corrigé la couleur ici */
 @media (min-width: 480px) { .section-title { align-items: center; flex-wrap: nowrap; } }
+
+/* NOUVEAUX STYLES : Pour l'écran de chargement */
+#loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--light-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.spinner {
+    border: 4px solid var(--border-color);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 
