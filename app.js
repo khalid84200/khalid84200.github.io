@@ -1,6 +1,6 @@
 // Importations Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, runTransaction, enableIndexedDbPersistence, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, writeBatch, enableIndexedDbPersistence, query, where, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
 // --- CONFIGURATION ---
@@ -29,18 +29,19 @@ onAuthStateChanged(auth, async (user) => {
             const invitationRef = doc(db, "invitations", user.email.toLowerCase());
             const invitationDoc = await getDoc(invitationRef);
             let orgId, role;
+            const defaultProfile = { name: "", surname: "", matricule: "" };
 
             if (invitationDoc.exists()) {
                 orgId = invitationDoc.data().orgId;
                 role = 'member';
-                userProfile = { email: user.email, role: role, orgId: orgId };
+                userProfile = { email: user.email, role: role, orgId: orgId, ...defaultProfile };
                 await setDoc(userRef, userProfile);
                 await deleteDoc(invitationRef);
             } else {
                 const orgRef = doc(collection(db, "organizations"));
                 orgId = orgRef.id;
                 role = 'admin';
-                userProfile = { email: user.email, role: role, orgId: orgId };
+                userProfile = { email: user.email, role: role, orgId: orgId, ...defaultProfile };
                 await setDoc(userRef, userProfile);
                 await setDoc(orgRef, { name: `Réseau de ${user.email}`, owner: user.uid, createdAt: new Date().toISOString() });
             }
@@ -56,7 +57,6 @@ onAuthStateChanged(auth, async (user) => {
         GMAOApp.showLoginScreen();
     }
 });
-
 
 getRedirectResult(auth).catch(error => { console.error("Redirect Error:", error); GMAOApp.showAlert(`Erreur : ${error.message}`); }).finally(() => { sessionStorage.removeItem('pendingGoogleAuth'); });
 enableIndexedDbPersistence(db).catch((err) => { console.warn("Firestore persistence error:", err.code); });
@@ -126,7 +126,6 @@ const GMAOApp = {
         
         const basePath = `organizations/${this.currentUser.orgId}`;
 
-        // Listen for equipments and parts
         ['equipments', 'parts'].forEach(colName => {
             const unsub = onSnapshot(collection(db, basePath, colName), (snapshot) => {
                 this.data[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -135,7 +134,6 @@ const GMAOApp = {
             this.unsubscribeListeners.push(unsub);
         });
         
-        // Listen for interventions with sorting
         const interventionsQuery = query(collection(db, basePath, "interventions"), orderBy("date", "desc"));
         const unsubInterventions = onSnapshot(interventionsQuery, (snapshot) => {
             this.data.interventions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -143,8 +141,6 @@ const GMAOApp = {
         }, (error) => { console.error(`Listen error for interventions:`, error); });
         this.unsubscribeListeners.push(unsubInterventions);
 
-
-        // Listen for members
         const membersQuery = query(collection(db, "users"), where("orgId", "==", this.currentUser.orgId));
         const unsubMembers = onSnapshot(membersQuery, (snapshot) => {
             this.data.members = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -152,7 +148,6 @@ const GMAOApp = {
         }, (error) => { console.error("Listen error for members:", error); });
         this.unsubscribeListeners.push(unsubMembers);
         
-        // Listen for consignes
         const consignesRef = doc(db, basePath, "shared", "consignes");
         const unsubConsignes = onSnapshot(consignesRef, (doc) => {
             this.data.consignes = doc.exists() ? doc.data() : { text: "" };
@@ -172,6 +167,7 @@ const GMAOApp = {
             case '#interventions': this.renderInterventionsPage(); break;
             case '#parts': this.renderPartsPage(); break;
             case '#network': this.renderNetworkPage(); break;
+            case '#profile': this.renderProfilePage(); break;
         }
     },
 
@@ -189,18 +185,23 @@ const GMAOApp = {
         let itemData = Object.fromEntries(formData.entries());
         delete itemData.id;
 
-        const path = `organizations/${this.currentUser.orgId}/${type}`;
+        const basePath = `organizations/${this.currentUser.orgId}`;
 
         try {
             if (type === 'parts' && !id) {
                 const newReference = itemData.reference.trim();
                 if (newReference && this.data.parts.some(p => p.reference && p.reference.toLowerCase() === newReference.toLowerCase())) {
-                    throw new Error("Cette référence de pièce existe déjà. Veuillez en utiliser une unique.");
+                    throw new Error("Cette référence de pièce existe déjà.");
                 }
             }
             
             if (type === 'interventions') {
+                const batch = writeBatch(db);
+                const memberProfile = this.data.members.find(m => m.id === this.currentUser.uid);
                 itemData.techId = this.currentUser.uid;
+                itemData.techName = `${memberProfile.name || ''} ${memberProfile.surname || ''}`.trim();
+                itemData.techMatricule = memberProfile.matricule || 'N/A';
+                
                 const newPartsUsed = {};
                 form.querySelectorAll('.used-part-item').forEach(item => {
                     const partId = item.dataset.partId;
@@ -209,38 +210,43 @@ const GMAOApp = {
                 });
                 itemData.partsUsed = newPartsUsed;
 
-                await runTransaction(db, async (transaction) => {
-                    const oldIntervention = id ? this.data.interventions.find(i => i.id === id) : null;
-                    const oldPartsUsed = oldIntervention?.partsUsed || {};
-                    const wasCompleted = oldIntervention?.status === 'completed';
-                    const isNowCompleted = itemData.status === 'completed';
+                const oldIntervention = id ? this.data.interventions.find(i => i.id === id) : null;
+                const oldPartsUsed = oldIntervention?.partsUsed || {};
+                const wasCompleted = oldIntervention?.status === 'completed';
+                const isNowCompleted = itemData.status === 'completed';
 
-                    const allPartIds = new Set([...Object.keys(oldPartsUsed), ...Object.keys(itemData.partsUsed)]);
-                    for (const partId of allPartIds) {
-                        const oldQty = wasCompleted ? (oldPartsUsed[partId] || 0) : 0;
-                        const newQty = isNowCompleted ? (itemData.partsUsed[partId] || 0) : 0;
-                        const change = oldQty - newQty;
-                        if (change !== 0) {
-                            const partRef = doc(db, path.replace('interventions', 'parts'), partId);
-                            const partDoc = await transaction.get(partRef);
-                            if (!partDoc.exists()) throw new Error(`Pièce ${partId} non trouvée.`);
-                            const currentQuantity = Number(partDoc.data().quantity);
-                            if (currentQuantity + change < 0) throw new Error(`Stock insuffisant pour ${partDoc.data().name}.`);
-                            transaction.update(partRef, { quantity: currentQuantity + change });
-                        }
+                const allPartIds = new Set([...Object.keys(oldPartsUsed), ...Object.keys(itemData.partsUsed)]);
+                for (const partId of allPartIds) {
+                    const oldQty = wasCompleted ? (oldPartsUsed[partId] || 0) : 0;
+                    const newQty = isNowCompleted ? (itemData.partsUsed[partId] || 0) : 0;
+                    const change = oldQty - newQty;
+
+                    if (change !== 0) {
+                        const partRef = doc(db, `${basePath}/parts`, partId);
+                        const partData = this.data.parts.find(p => p.id === partId);
+                        if (!partData) throw new Error(`Pièce ${partId} non trouvée dans le cache local.`);
+                        
+                        const currentQuantity = Number(partData.quantity);
+                        const newQuantity = currentQuantity + change;
+                        if (newQuantity < 0) throw new Error(`Stock insuffisant pour ${partData.name}.`);
+
+                        batch.update(partRef, { quantity: newQuantity });
                     }
-                    if (id) {
-                        transaction.set(doc(db, path, id), itemData, { merge: true });
-                    } else {
-                        itemData.otNumber = `OT-${Date.now()}`;
-                        transaction.set(doc(collection(db, path)), itemData);
-                    }
-                });
+                }
+                
+                if (id) {
+                    batch.set(doc(db, `${basePath}/interventions`, id), itemData, { merge: true });
+                } else {
+                    itemData.otNumber = `OT-${Date.now()}`;
+                    batch.set(doc(collection(db, `${basePath}/interventions`)), itemData);
+                }
+                await batch.commit();
+
             } else {
                 if (id) {
-                    await setDoc(doc(db, path, id), itemData, { merge: true });
+                    await setDoc(doc(db, `${basePath}/${type}`, id), itemData, { merge: true });
                 } else {
-                    await addDoc(collection(db, path), itemData);
+                    await addDoc(collection(db, `${basePath}/${type}`), itemData);
                 }
             }
             this.closeModal('formModal');
@@ -271,20 +277,13 @@ const GMAOApp = {
         document.getElementById('filter-btn').onclick = () => { this.dashboardFilters.startDate = dateStartInput.value; this.dashboardFilters.endDate = dateEndInput.value; this.renderDashboard(); };
         const filteredInterventions = this.getFilteredInterventions(this.dashboardFilters);
         
-        // Recent interventions are already sorted by the listener
         const recentList = document.getElementById('recent-interventions-list');
         recentList.innerHTML = this.data.interventions.length ? this.data.interventions.slice(0, 5).map(item => this.getItemTemplate('interventions', item)).join('') : `<div class="loading-message">Aucune intervention récente.</div>`;
         
         this.calculateAndDisplayKPIs(filteredInterventions);
         this.renderAnalysisCharts(filteredInterventions);
         
-        // Render Ratio Chart on Dashboard
-        const typeCounts = filteredInterventions.reduce((acc, item) => {
-            const type = item.type || "N/D";
-            acc[type] = (acc[type] || 0) + 1;
-            return acc;
-        }, {});
-        
+        const typeCounts = filteredInterventions.reduce((acc, item) => { const type = item.type || "N/D"; acc[type] = (acc[type] || 0) + 1; return acc; }, {});
         const labels = Object.keys(typeCounts);
         const data = Object.values(typeCounts);
         const backgroundColors = labels.map(label => {
@@ -292,14 +291,7 @@ const GMAOApp = {
             if (label === 'Préventive') return getComputedStyle(document.documentElement).getPropertyValue('--primary-color');
             return '#ccc';
         });
-        
-        this.createChart('ratioChartCanvas', 'doughnut', { 
-            labels: labels, 
-            datasets: [{ 
-                data: data, 
-                backgroundColor: backgroundColors
-            }] 
-        }, { plugins: { legend: { position: 'top' } } });
+        this.createChart('ratioChartCanvas', 'doughnut', { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors }] }, { plugins: { legend: { position: 'top' } } });
 
         document.getElementById('export-downtime-btn').onclick = () => this.handleExportDowntime(false);
         document.getElementById('export-24h-downtime-btn').onclick = () => this.handleExportDowntime(true);
@@ -314,10 +306,10 @@ const GMAOApp = {
         ['intervention-date-start', 'intervention-date-end'].forEach(id => { document.getElementById(id).oninput = () => this.renderInterventionsPage(); });
         document.getElementById('intervention-search').oninput = () => this.renderInterventionsPage();
         
-        const startDate = document.getElementById('intervention-date-start').value, 
-              endDate = document.getElementById('intervention-date-end').value;
+        const startDate = document.getElementById('intervention-date-start').value;
+        const endDate = document.getElementById('intervention-date-end').value;
 
-        let filteredByDate = this.data.interventions; // Already sorted
+        let filteredByDate = this.data.interventions;
         if (startDate || endDate) {
              filteredByDate = this.getFilteredInterventions({ startDate, endDate });
         }
@@ -338,7 +330,6 @@ const GMAOApp = {
     },
 
     renderNetworkPage() {
-        // Consignes Logic
         const consignesDisplay = document.getElementById('consignes-display');
         const consignesEdit = document.getElementById('consignes-edit');
         const consignesTextarea = document.getElementById('consignes-textarea');
@@ -355,27 +346,35 @@ const GMAOApp = {
         const searchTerm = document.getElementById('member-search').value;
         this.renderList('members', this.data.members, searchTerm);
     },
+
+    renderProfilePage() {
+        const memberProfile = this.data.members.find(m => m.id === this.currentUser.uid);
+        if (memberProfile) {
+            document.getElementById('profile-email').value = memberProfile.email || '';
+            document.getElementById('profile-surname').value = memberProfile.surname || '';
+            document.getElementById('profile-name').value = memberProfile.name || '';
+            document.getElementById('profile-matricule').value = memberProfile.matricule || '';
+        }
+    },
     
     updateUIVisibility() {
         this.updateLowStockNotification();
         const hash = window.location.hash || '#dashboard';
         const fab = document.getElementById('fab-add-button');
-        const networkNavBtn = document.getElementById('nav-network-btn');
-        const networkManagementCard = document.getElementById('network-management-card');
-        const consignesCard = document.getElementById('consignes-card');
-
-        const isAnonymous = this.currentUser.isAnonymous;
-        networkNavBtn.style.display = isAnonymous ? 'none' : 'flex';
         
-        if (consignesCard) {
-            consignesCard.style.display = isAnonymous ? 'none' : 'block';
+        const isAnonymous = this.currentUser.isAnonymous;
+        document.getElementById('nav-network-btn').style.display = isAnonymous ? 'none' : 'flex';
+        document.getElementById('nav-profile-btn').style.display = isAnonymous ? 'none' : 'flex';
+        
+        if (document.getElementById('consignes-card')) {
+            document.getElementById('consignes-card').style.display = isAnonymous ? 'none' : 'block';
         }
 
-        if (networkManagementCard) {
-            networkManagementCard.style.display = this.currentUser.role === 'admin' ? 'block' : 'none';
+        if (document.getElementById('network-management-card')) {
+            document.getElementById('network-management-card').style.display = this.currentUser.role === 'admin' ? 'block' : 'none';
         }
 
-        const pagesWithoutFab = ['#dashboard', '#network', ''];
+        const pagesWithoutFab = ['#dashboard', '#network', '#profile', ''];
         fab.style.display = pagesWithoutFab.includes(hash) ? 'none' : 'flex';
     },
 
@@ -392,13 +391,22 @@ const GMAOApp = {
                 item = item || {};
                 title = id ? 'Modifier Intervention' : 'Nouvelle Intervention';
                 const eqOptions = this.data.equipments.map(e => `<option value="${e.id}">${e.uniqueId || e.name}</option>`).join('');
+                
+                let assignedMemberIdentifier;
+                if (id) {
+                    assignedMemberIdentifier = `${item.techName || ''} (${item.techMatricule || 'N/A'})`;
+                } else {
+                    const memberProfile = this.data.members.find(m => m.id === this.currentUser.uid);
+                    assignedMemberIdentifier = `${memberProfile.name || ''} ${memberProfile.surname || ''} (${memberProfile.matricule || 'N/A'})`.trim();
+                }
+
                 html = `<input type="hidden" name="id" value="${item.id || ''}">
                         <div class="form-group"><label>Description</label><input type="text" name="desc" class="form-control" value="${item.desc || ''}" required></div>
                         <div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" value="${item.date || new Date().toISOString().slice(0,10)}" required></div>
                         <div class="form-group"><label>Type</label><select name="type" class="form-control"><option>Corrective</option><option>Préventive</option></select></div>
                         <div class="form-group"><label>Statut</label><select name="status" class="form-control"><option>planned</option><option>progress</option><option>completed</option></select></div>
                         <div class="form-group"><label>Équipement</label><select name="eqId" class="form-control">${eqOptions}</select></div>
-                        <div class="form-group"><label>Membre Assigné</label><input type="text" class="form-control" value="${this.currentUser.email}" disabled></div>
+                        <div class="form-group"><label>Membre Assigné</label><input type="text" class="form-control" value="${assignedMemberIdentifier}" disabled></div>
                         <hr>
                         <div class="form-group"><label>Début intervention</label><input type="datetime-local" name="downtimeStart" class="form-control" value="${item.downtimeStart || ''}"></div>
                         <div class="form-group"><label>Fin intervention</label><input type="datetime-local" name="downtimeEnd" class="form-control" value="${item.downtimeEnd || ''}"></div>
@@ -458,7 +466,12 @@ const GMAOApp = {
         const listElement = document.getElementById(listElementId);
         if (!listElement) return;
         const lowerSearchTerm = searchTerm.toLowerCase();
-        const filteredData = searchTerm ? data.filter(item => (item.email || item.name || item.desc || '').toLowerCase().includes(lowerSearchTerm)) : data;
+        const filteredData = searchTerm ? data.filter(item => 
+            (item.name && (item.name + " " + item.surname).toLowerCase().includes(lowerSearchTerm)) || 
+            (item.matricule && item.matricule.toLowerCase().includes(lowerSearchTerm)) ||
+            (item.email && item.email.toLowerCase().includes(lowerSearchTerm)) ||
+            (item.desc && item.desc.toLowerCase().includes(lowerSearchTerm))
+        ) : data;
         listElement.innerHTML = filteredData.length > 0 ? filteredData.map(item => this.getItemTemplate(type, item)).join('') : `<div class="loading-message">Aucun élément trouvé.</div>`;
     },
 
@@ -468,11 +481,11 @@ const GMAOApp = {
             case 'equipments': icon = `<div class="item-icon bg-blue"><i class="fas fa-cogs"></i></div>`; title = item.uniqueId ? `${item.uniqueId} - ${item.name}` : item.name; subtitle = `N/S: ${item.serialNumber || 'N/A'}`; actions = `<i class="fas fa-edit action-icon" data-action="edit"></i><i class="fas fa-qrcode action-icon" data-action="qr"></i>`; break;
             case 'interventions': 
                 const eq = this.data.equipments.find(e => e.id === item.eqId); 
-                const member = this.data.members.find(m => m.id === item.techId); 
+                const memberName = item.techName || (item.techMatricule || 'N/A');
                 const interventionColor = item.type === 'Corrective' ? 'bg-orange' : 'bg-blue';
                 icon = `<div class="item-icon ${interventionColor}"><i class="fas fa-wrench"></i></div>`; 
                 title = `${item.otNumber || ''}: ${item.desc}`; 
-                subtitle = `${eq ? eq.name : 'Équipement'} | ${member ? member.email.split('@')[0] : 'N/A'}`; 
+                subtitle = `${eq ? eq.name : 'Équipement'} | ${memberName}`; 
                 if (item.downtimeStart && item.downtimeEnd) {
                     const duration = new Date(item.downtimeEnd) - new Date(item.downtimeStart);
                     details = `<div class="item-details"><span class="detail-badge"><i class="fas fa-clock"></i> ${this.formatDuration(duration)}</span></div>`;
@@ -498,7 +511,17 @@ const GMAOApp = {
                              <i class="fas fa-edit action-icon" data-action="edit" title="Modifier"></i>
                            </div>`; 
                 break;
-            case 'members': const isOwner = item.role === 'admin'; icon = `<div class="item-icon ${isOwner ? 'bg-purple' : 'bg-green'}"><i class="fas ${isOwner ? 'fa-user-shield' : 'fa-user'}"></i></div>`; title = item.email; actions = `<span class="status-badge ${isOwner ? 'status-planned' : 'status-info'}">${isOwner ? 'Admin' : 'Membre'}</span>`; clickableClass = ''; break;
+            case 'members': 
+                const isOwner = item.role === 'admin'; 
+                icon = `<div class="item-icon ${isOwner ? 'bg-purple' : 'bg-green'}"><i class="fas ${isOwner ? 'fa-user-shield' : 'fa-user'}"></i></div>`; 
+                title = `${item.name || ''} ${item.surname || ''}`.trim() || item.email;
+                subtitle = `Matricule: ${item.matricule || 'Non défini'}`;
+                actions = `<span class="status-badge ${isOwner ? 'status-planned' : 'status-info'}">${isOwner ? 'Admin' : 'Membre'}</span>`; 
+                if (this.currentUser.role === 'admin' && item.id !== this.currentUser.uid) {
+                    actions += `<i class="fas fa-trash-alt action-icon-delete" data-action="delete-member" title="Supprimer le membre"></i>`;
+                }
+                clickableClass = ''; 
+                break;
         }
         return `<li class="list-item ${clickableClass}" data-type="${type}" data-id="${item.id}">${icon}<div class="item-info"><div class="item-title">${title}</div><div class="item-subtitle">${subtitle}</div>${details}</div><div class="item-actions">${actions}</div></li>`;
     },
@@ -515,7 +538,47 @@ const GMAOApp = {
         } catch (error) { console.error("Invite Error:", error); this.showAlert("L'invitation a échoué."); }
     },
     
-    setupEventListeners() {if (this.eventListenersAttached) return; document.getElementById('logout-btn').addEventListener('click', () => signOut(auth)); window.addEventListener('hashchange', () => this.navigateTo(window.location.hash)); document.querySelector('.bottom-nav').addEventListener('click', e => { const navItem = e.target.closest('.nav-item'); if (navItem) { e.preventDefault(); this.navigateTo(navItem.getAttribute('href')); } }); document.getElementById('fab-add-button').addEventListener('click', async () => { if (!await this.checkAuthAndPrompt()) return; const page = (window.location.hash || '#dashboard').substring(1); const creatablePages = ['equipments', 'interventions', 'parts']; if (creatablePages.includes(page)) this.openForm(page); }); document.querySelectorAll('.modal').forEach(modal => { modal.addEventListener('click', e => { if (e.target === modal || e.target.classList.contains('close-modal')) this.closeModal(modal.id); }); }); document.getElementById('mainForm').addEventListener('submit', (e) => this.handleSubmit(e)); document.querySelector('.theme-switcher').addEventListener('click', () => this.toggleTheme()); document.getElementById('add-test-data-btn').addEventListener('click', () => this.addTestData()); document.getElementById('invite-form').addEventListener('submit', (e) => this.inviteUser(e)); document.getElementById('member-search').addEventListener('input', () => this.renderNetworkPage()); document.getElementById('save-consignes-btn').addEventListener('click', () => this.saveConsignes()); document.querySelector('.app-container').addEventListener('click', e => { const listItem = e.target.closest('.list-item-clickable'); if (!listItem) return; const actionIcon = e.target.closest('.action-icon'); const type = listItem.dataset.type; const id = listItem.dataset.id; if (actionIcon) { e.stopPropagation(); const action = actionIcon.dataset.action; if (action === 'edit') this.openForm(type, id); else if (action === 'qr') this.showQRCode(id); else if (action === 'clone') this.clonePart(id); } else { switch(type) { case 'equipments': this.showEquipmentDetails(id); break; case 'parts': this.showPartDetails(id); break; case 'interventions': this.openForm(type, id); break; } } }); this.eventListenersAttached = true; },
+    setupEventListeners() {
+        if (this.eventListenersAttached) return;
+        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+        window.addEventListener('hashchange', () => this.navigateTo(window.location.hash));
+        document.querySelector('.bottom-nav').addEventListener('click', e => { const navItem = e.target.closest('.nav-item'); if (navItem) { e.preventDefault(); this.navigateTo(navItem.getAttribute('href')); } });
+        document.getElementById('fab-add-button').addEventListener('click', async () => { if (!await this.checkAuthAndPrompt()) return; const page = (window.location.hash || '#dashboard').substring(1); const creatablePages = ['equipments', 'interventions', 'parts']; if (creatablePages.includes(page)) this.openForm(page); });
+        document.querySelectorAll('.modal').forEach(modal => { modal.addEventListener('click', e => { if (e.target === modal || e.target.classList.contains('close-modal')) this.closeModal(modal.id); }); });
+        document.getElementById('mainForm').addEventListener('submit', (e) => this.handleSubmit(e));
+        document.querySelector('.theme-switcher').addEventListener('click', () => this.toggleTheme());
+        document.getElementById('add-test-data-btn').addEventListener('click', () => this.addTestData());
+        document.getElementById('invite-form').addEventListener('submit', (e) => this.inviteUser(e));
+        document.getElementById('member-search').addEventListener('input', () => this.renderNetworkPage());
+        document.getElementById('save-consignes-btn').addEventListener('click', () => this.saveConsignes());
+        document.getElementById('profile-form').addEventListener('submit', (e) => this.handleProfileUpdate(e));
+        document.querySelector('.app-container').addEventListener('click', e => { const listItem = e.target.closest('.list-item'); if (!listItem) return; const actionIcon = e.target.closest('.action-icon, .action-icon-delete'); const type = listItem.dataset.type; const id = listItem.dataset.id; if (actionIcon) { e.stopPropagation(); const action = actionIcon.dataset.action; if (action === 'edit') this.openForm(type, id); else if (action === 'qr') this.showQRCode(id); else if (action === 'clone') this.clonePart(id); else if (action === 'delete-member') this.deleteMember(id); } else if (listItem.classList.contains('list-item-clickable')) { switch(type) { case 'equipments': this.showEquipmentDetails(id); break; case 'parts': this.showPartDetails(id); break; case 'interventions': this.openForm(type, id); break; } } });
+        this.eventListenersAttached = true;
+    },
+
+    async handleProfileUpdate(event) {
+        event.preventDefault();
+        const form = event.target;
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+
+        const profileData = {
+            surname: document.getElementById('profile-surname').value,
+            name: document.getElementById('profile-name').value,
+            matricule: document.getElementById('profile-matricule').value
+        };
+
+        try {
+            const userRef = doc(db, "users", this.currentUser.uid);
+            await updateDoc(userRef, profileData);
+            this.showAlert("Profil mis à jour avec succès !");
+        } catch (error) {
+            console.error("Profile update error:", error);
+            this.showAlert("Erreur lors de la mise à jour du profil.");
+        } finally {
+            button.disabled = false;
+        }
+    },
     
     async saveConsignes() {
         const text = document.getElementById('consignes-textarea').value;
@@ -542,6 +605,24 @@ const GMAOApp = {
     updateLowStockNotification() { const needsReorder = this.data.parts.some(p => Number(p.quantity) <= Number(p.minQuantity)); document.querySelector('.nav-item[href="#parts"] .notification-dot').style.display = needsReorder ? 'block' : 'none'; },
     async addTestData(localOnly = false) { const testDataContent = { equipments: [ { id: "eq1", name: "Presse Hydraulique P1", uniqueId: "PRE-001" }, { id: "eq2", name: "Robot de soudure R2", uniqueId: "ROB-002" } ], parts: [ { name: "Filtre à huile H-123", reference: "F-5540", quantity: 12, minQuantity: 5 }, { name: "Roulement 6204-2RS", reference: "R-6204", quantity: 3, minQuantity: 4 } ], interventions: [ { eqId: "eq1", techId: "placeholder_uid", desc: "Surchauffe hydraulique", type: "Corrective", date: "2025-08-22", status: "completed" } ] }; if (localOnly) { Object.keys(testDataContent).forEach(key => { this.data[key] = testDataContent[key].map(item => ({...item, id: item.id || crypto.randomUUID()})); }); this.data.members = [{email: "vous@exemple.com", role:"admin"}]; this.renderCurrentPage(); return; } if (!this.currentUser || !this.currentUser.orgId) return; testDataContent.interventions[0].techId = this.currentUser.uid; const btn = document.getElementById('add-test-data-btn'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ajout...'; } const batch = writeBatch(db); const basePath = `organizations/${this.currentUser.orgId}`; try { testDataContent.equipments.forEach(item => batch.set(doc(db, basePath, "equipments", item.id), item)); testDataContent.parts.forEach(item => batch.set(doc(collection(db, basePath, "parts")), item)); testDataContent.interventions.forEach(item => batch.set(doc(collection(db, basePath, "interventions")), item)); await batch.commit(); this.showAlert("Données de test ajoutées !"); } catch (e) { console.error("Test Data Error: ", e); this.showAlert("Erreur lors de l'ajout des données."); } finally { if (btn) { btn.disabled = false; btn.textContent = 'Ajouter Données de Test'; } } },
     async deleteItem(type, id) { if (!await this.checkAuthAndPrompt() || !await this.showConfirm('Voulez-vous vraiment supprimer cet élément ?')) return; const path = `organizations/${this.currentUser.orgId}/${type}/${id}`; try { await deleteDoc(doc(db, path)); this.closeModal('formModal'); } catch (e) { console.error("Firestore Delete Error:", e); this.showAlert("La suppression a échoué."); } },
+    
+    async deleteMember(memberId) {
+        const memberToDelete = this.data.members.find(m => m.id === memberId);
+        if (!memberToDelete) return;
+
+        const confirmed = await this.showConfirm(`Voulez-vous vraiment supprimer ${memberToDelete.name || memberToDelete.email} du réseau ?`);
+        if (!confirmed) return;
+
+        try {
+            const userRef = doc(db, "users", memberId);
+            await updateDoc(userRef, { orgId: null });
+            this.showAlert(`${memberToDelete.email} a été supprimé(e) du réseau.`);
+        } catch (error) {
+            console.error("Error removing member:", error);
+            this.showAlert("Erreur lors de la suppression du membre.");
+        }
+    },
+
     async checkAuthAndPrompt() { if (this.currentUser && this.currentUser.isAnonymous) { this.openModal('auth-prompt-modal'); document.getElementById('prompt-google-btn').onclick = () => { this.closeModal('auth-prompt-modal'); this.handleGoogleLogin(); }; document.getElementById('prompt-email-btn').onclick = () => { this.closeModal('auth-prompt-modal'); signOut(auth); }; return false; } return true; },
     showAlert(message, title = 'Information') { document.getElementById('custom-alert-title').textContent = title; document.getElementById('custom-alert-message').textContent = message; const modal = document.getElementById('custom-alert-modal'); modal.classList.add('active'); document.getElementById('custom-alert-ok').onclick = () => modal.classList.remove('active'); },
     showConfirm(message, title = 'Confirmation') { return new Promise((resolve) => { document.getElementById('custom-confirm-title').textContent = title; document.getElementById('custom-confirm-message').textContent = message; const modal = document.getElementById('custom-confirm-modal'); modal.classList.add('active'); document.getElementById('custom-confirm-ok').onclick = () => { modal.classList.remove('active'); resolve(true); }; document.getElementById('custom-confirm-cancel').onclick = () => { modal.classList.remove('active'); resolve(false); }; }); },
@@ -606,11 +687,10 @@ const GMAOApp = {
             filename = `export_pannes_${this.dashboardFilters.startDate}_au_${this.dashboardFilters.endDate}.csv`;
         }
 
-        const headers = ['ID_Machine', 'Nom_Machine', 'Description_Panne', 'Date', 'Debut_Arret', 'Fin_Arret', 'Duree_Arret_Heures', 'Membre', 'ID_Membre'];
+        const headers = ['ID_Machine', 'Nom_Machine', 'Description_Panne', 'Date', 'Debut_Arret', 'Fin_Arret', 'Duree_Arret_Heures', 'Nom_Membre', 'Matricule_Membre'];
         let totalDowntimeHours = 0;
         const data = interventionsToExport.map(i => {
             const eq = this.data.equipments.find(e => e.id === i.eqId);
-            const member = this.data.members.find(m => m.id === i.techId);
             const downtime = new Date(i.downtimeEnd) - new Date(i.downtimeStart);
             const downtimeHours = (downtime / (1000 * 60 * 60));
             totalDowntimeHours += downtimeHours;
@@ -621,8 +701,8 @@ const GMAOApp = {
                 Debut_Arret: i.downtimeStart.replace('T', ' '), 
                 Fin_Arret: i.downtimeEnd.replace('T', ' '), 
                 Duree_Arret_Heures: downtimeHours.toFixed(2),
-                Membre: member ? member.email : 'N/A',
-                ID_Membre: member ? member.id : 'N/A'
+                Nom_Membre: i.techName || 'N/A',
+                Matricule_Membre: i.techMatricule || 'N/A'
             };
         });
         const dataRows = [headers];
@@ -656,9 +736,9 @@ const GMAOApp = {
             const startDate = document.getElementById('part-detail-start').value; 
             const endDate = document.getElementById('part-detail-end').value; 
             
-            const consumptions = this.data.interventions.filter(i => { if (!i.partsUsed || !i.partsUsed[id] || i.status !== 'completed') return false; const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }).map(i => ({ date: i.date, memberId: i.techId, details: `OT: ${i.otNumber || 'N/A'}`, quantity: -i.partsUsed[id] })); 
+            const consumptions = this.data.interventions.filter(i => { if (!i.partsUsed || !i.partsUsed[id] || i.status !== 'completed') return false; const iDate = new Date(i.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && iDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (iDate > end) return false; } return true; }).map(i => ({ date: i.date, memberId: i.techId, memberName: i.techName, memberMatricule: i.techMatricule, details: `OT: ${i.otNumber || 'N/A'}`, quantity: -i.partsUsed[id] })); 
             
-            const supplies = (part.history || []).filter(h => { const hDate = new Date(h.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && hDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (hDate > end) return false; } return true; }).map(h => ({ date: h.date, memberId: h.memberId, details: `BC: ${h.poNumber}`, quantity: +h.quantity })); 
+            const supplies = (part.history || []).filter(h => { const hDate = new Date(h.date); const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start && hDate < start) return false; if (end) { end.setHours(23, 59, 59, 999); if (hDate > end) return false; } return true; }).map(h => ({ ...h, details: `BC: ${h.poNumber}`, quantity: +h.quantity })); 
 
             const history = [...consumptions, ...supplies].sort((a,b) => new Date(b.date) - new Date(a.date)); 
             const historyEl = document.getElementById('part-detail-history'); 
@@ -669,7 +749,7 @@ const GMAOApp = {
                 let tableHTML = '<table class="detail-table"><tr><th>Date</th><th>Membre</th><th>Détails</th><th>Qté</th></tr>'; 
                 history.forEach(h => { 
                     const member = this.data.members.find(m => m.id === h.memberId);
-                    const memberIdentifier = member ? member.email.split('@')[0] : 'N/A';
+                    const memberIdentifier = member ? `${member.name} (${member.matricule})` : `${h.memberName} (${h.memberMatricule})`;
                     tableHTML += `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${memberIdentifier}</td><td>${h.details}</td><td>${h.quantity > 0 ? '+' : ''}${h.quantity}</td></tr>`; }); 
                 tableHTML += '</table>'; 
                 historyEl.innerHTML = tableHTML; 
@@ -681,19 +761,23 @@ const GMAOApp = {
             if (qty > 0) { 
                 const partRef = doc(db, `organizations/${this.currentUser.orgId}/parts`, id); 
                 try { 
-                    await runTransaction(db, async (transaction) => { 
-                        const partDoc = await transaction.get(partRef); 
-                        if (partDoc.exists()) { 
-                            const newQuantity = Number(partDoc.data().quantity) + qty; 
-                            const newHistory = partDoc.data().history || []; 
-                            newHistory.push({ date: new Date().toISOString().slice(0,10), memberId: this.currentUser.uid, poNumber: poNumber, quantity: qty }); 
-                            transaction.update(partRef, { quantity: newQuantity, history: newHistory }); 
-                        } 
-                    }); 
-                    document.getElementById('part-supply-qty').value = ''; 
-                    document.getElementById('part-supply-po').value = ''; 
-                } catch (e) { this.showAlert("Erreur."); } 
-            } 
+                    const partDoc = await getDoc(partRef); // Read before transaction for offline
+                    if (partDoc.exists()) {
+                        const newQuantity = Number(partDoc.data().quantity) + qty;
+                        const newHistory = partDoc.data().history || [];
+                        const memberProfile = this.data.members.find(m => m.id === this.currentUser.uid);
+                        newHistory.push({ date: new Date().toISOString().slice(0, 10), memberId: this.currentUser.uid, memberName: `${memberProfile.name} ${memberProfile.surname}`, memberMatricule: memberProfile.matricule, poNumber: poNumber, quantity: qty });
+
+                        const batch = writeBatch(db);
+                        batch.update(partRef, { quantity: newQuantity, history: newHistory });
+                        await batch.commit();
+                    }
+                    document.getElementById('part-supply-qty').value = '';
+                    document.getElementById('part-supply-po').value = '';
+                } catch (e) {
+                    this.showAlert("Erreur lors de l'approvisionnement.");
+                }
+            }
         }); 
         document.getElementById('part-detail-start').onchange = calculateDetails; 
         document.getElementById('part-detail-end').onchange = calculateDetails; 
